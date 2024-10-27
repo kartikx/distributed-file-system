@@ -16,6 +16,16 @@ var LOCAL_IP = ""
 var isIntroducer = false
 
 func main() {
+
+	test_string := "asekjj;lkjjjkkkkddd"
+	test := CalculatePointOnRing(test_string)
+	fmt.Println(test_string)
+	fmt.Println(test)
+
+	returnNodeIDs, err := GetNodesOnRingForPoint(10)
+	fmt.Println(returnNodeIDs, err)
+	os.Exit(0)
+
 	// Synchronizes start of client and server.
 	clientServerChan := make(chan int, 5)
 

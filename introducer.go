@@ -77,9 +77,10 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 		if ip == INTRODUCER_SERVER_HOST {
 			// TODO kartikr2 using pointers, ensure that it works fine.
 			AddToMembershipInfo(id, &MemberInfo{
-				connection: introducer_conn,
-				host:       ip,
-				failed:     memberInfo.failed,
+				connection:   introducer_conn,
+				host:         ip,
+				failed:       memberInfo.failed,
+				ringPosition: CalculatePointOnRing(id),
 			})
 		} else if ip == localIP {
 			nodeId = id
@@ -87,14 +88,15 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 			conn, err := net.Dial("udp", GetServerEndpoint(ip))
 
 			if err != nil {
-				LogError(fmt.Sprintf("Failed to estabilish connection with: ", id))
+				LogError(fmt.Sprintf("Failed to estabilish connection with: %s", id))
 				// TODO what to do here? If it actually failed it should be detected by some other node.
 			}
 
 			AddToMembershipInfo(id, &MemberInfo{
-				connection: &conn,
-				host:       ip,
-				failed:     memberInfo.failed,
+				connection:   &conn,
+				host:         ip,
+				failed:       memberInfo.failed,
+				ringPosition: CalculatePointOnRing(id),
 			})
 		}
 	}
@@ -118,9 +120,10 @@ func IntroduceNodeToGroup(request string, addr *net.UDPAddr) (Message, error) {
 
 	// For the response, add yourself to the list as well.
 	membershipListResponse[NODE_ID] = MemberInfo{
-		connection: nil,
-		host:       NODE_ID,
-		failed:     false,
+		connection:   nil,
+		host:         NODE_ID,
+		failed:       false,
+		ringPosition: CalculatePointOnRing(NODE_ID),
 	}
 
 	membershipListEnc, err := json.Marshal(membershipListResponse)

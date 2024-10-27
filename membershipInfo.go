@@ -33,9 +33,10 @@ func AddNewMemberToMembershipInfo(nodeId string) error {
 	defer membershipInfoMutex.Unlock()
 
 	membershipInfo[nodeId] = MemberInfo{
-		connection: &conn,
-		host:       ipAddr,
-		failed:     false,
+		connection:   &conn,
+		host:         ipAddr,
+		failed:       false,
+		ringPosition: CalculatePointOnRing(nodeId),
 	}
 
 	LogMessage(fmt.Sprintf("JOIN NODE: %s", nodeId))
