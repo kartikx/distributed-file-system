@@ -12,11 +12,8 @@ import (
 
 var NODE_ID = ""
 var LOCAL_IP = ""
-var INCARNATION = 0
 
-var inSuspectMode = false
 var isIntroducer = false
-var dropRate = 0.0
 
 func main() {
 	// Synchronizes start of client and server.
@@ -88,20 +85,8 @@ func main() {
 			PrintPiggybackMessages()
 		case strings.Contains(demoInstruction, "leave"):
 			ExitGroup()
-		case strings.Contains(demoInstruction, "status_sus"):
-			fmt.Printf("In Suspect Mode: %t\n", inSuspectMode)
 		case strings.Contains(demoInstruction, "meta_info"):
 			fmt.Printf("ID: %s\n", NODE_ID)
-			fmt.Printf("Incarnation: %d\n", INCARNATION)
-			fmt.Printf("Dropout: %f\n", dropRate)
-		case strings.Contains(demoInstruction, "enable_sus"):
-			StartSuspecting()
-		case strings.Contains(demoInstruction, "disable_sus"):
-			StopSuspecting()
-		case strings.Contains(demoInstruction, "list_suspects"):
-			PrintSuspectedNodes()
-		case strings.Contains(demoInstruction, "dropout"):
-			SetDropout(demoInstruction)
 		}
 	}
 }

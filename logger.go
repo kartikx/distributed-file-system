@@ -61,18 +61,6 @@ func PrintMessage(direction string, message Message, nodeId string) {
 	case HELLO:
 		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] HELLO message with %s\n", currentTime, direction, nodeId, message.Data)
 
-	case SUSPECT:
-		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] SUSPECT message with %s\n", currentTime, direction, nodeId, message.Data)
-
-	case ALIVE:
-		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] ALIVE message with %s\n", currentTime, direction, nodeId, message.Data)
-
-	case SUSPECT_MODE:
-		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] SUSPECT_MODE message with %s\n", currentTime, direction, nodeId, message.Data)
-
-	case DROPOUT:
-		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] DROPOUT message with %s\n", currentTime, direction, nodeId, message.Data)
-
 	default:
 		fmt.Fprintf(log_file_writer, "[%s] [%s] ********Trying to print unknown message type**********", currentTime, direction)
 	}

@@ -11,22 +11,16 @@ const (
 	ACK  MessageType = 1
 	JOIN MessageType = 2
 	// Piggybacked message types.
-	LEAVE        MessageType = 3
-	FAIL         MessageType = 4
-	HELLO        MessageType = 5
-	SUSPECT      MessageType = 6
-	ALIVE        MessageType = 7
-	SUSPECT_MODE MessageType = 8
-	DROPOUT      MessageType = 9
+	LEAVE MessageType = 3
+	FAIL  MessageType = 4
+	HELLO MessageType = 5
 )
 
 type MemberInfo struct {
 	connection *net.Conn
 	host       string
 	// TODO are we ever using this failed bool?
-	failed      bool
-	suspected   bool
-	incarnation int
+	failed bool
 }
 
 type MessageType int32

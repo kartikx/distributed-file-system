@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -67,39 +65,26 @@ func handleEachMember(nodeId string) {
 
 	buffer := make([]byte, 8192)
 
-	randomFloat := rand.Float64()
-
 	// TODO would this work would even if I were to re-use the connection?
 	connection.SetReadDeadline(time.Now().Add(TIMEOUT_DETECTION_MILLISECONDS * time.Millisecond))
 	mLen, err := connection.Read(buffer)
 
-	if err != nil || randomFloat < dropRate {
-		// In suspicion, you would want to suspect it first.
-		if inSuspectMode {
-			LogMessage(fmt.Sprintf("SUSPECT NODE %s", nodeId))
-			// Create a SUSPECT message to process and disseminate
-			member, _ := GetMemberInfo(nodeId)
-			suspectMessage := Message{Kind: SUSPECT, Data: strconv.Itoa(member.incarnation) + "@" + nodeId}
-			// PrintMessage("outgoing", suspectMessage, suspectMessage.Data)
-			go ProcessSuspectMessage(suspectMessage)
+	if err != nil {
+		// Just mark the node as failed
+		LogError(fmt.Sprintf("Error in reading from connection for nodeId [%s] Err: [%s]\n", nodeId, err))
 
-			return
-		} else { // Otherwise, just mark the node as failed
-			LogError(fmt.Sprintf("Error in reading from connection for nodeId [%s] Err: [%s]\n", nodeId, err))
+		LogMessage(fmt.Sprintf("DETECTED NODE %s as FAILED", nodeId))
+		DeleteMember(nodeId)
 
-			LogMessage(fmt.Sprintf("DETECTED NODE %s as FAILED", nodeId))
-			DeleteMember(nodeId)
-
-			// Start propagating FAIL message.
-			failedMessage := Message{
-				Kind: FAIL,
-				Data: nodeId,
-			}
-
-			AddPiggybackMessage(failedMessage)
-
-			return
+		// Start propagating FAIL message.
+		failedMessage := Message{
+			Kind: FAIL,
+			Data: nodeId,
 		}
+
+		AddPiggybackMessage(failedMessage)
+
+		return
 	}
 
 	messages, err := DecodeAckMessage(buffer[:mLen])
@@ -115,16 +100,6 @@ func handleEachMember(nodeId string) {
 	}
 	PrintMessage("incoming", ackMessage, nodeId)
 
-	if inSuspectMode {
-		// if you are suspecting the node, mark it as alive since you got an ACK
-		member, _ := GetMemberInfo(nodeId)
-		if member.suspected {
-			aliveMessage := Message{Kind: ALIVE, Data: strconv.Itoa(member.incarnation) + "@" + nodeId}
-			ProcessAliveMessage(aliveMessage)
-			AddPiggybackMessage(aliveMessage)
-		}
-	}
-
 	for _, subMessage := range messages {
 		switch subMessage.Kind {
 		case HELLO:
@@ -133,14 +108,6 @@ func handleEachMember(nodeId string) {
 			ProcessFailOrLeaveMessage(subMessage)
 		case FAIL:
 			ProcessFailOrLeaveMessage(subMessage)
-		case SUSPECT:
-			go ProcessSuspectMessage(subMessage)
-		case ALIVE:
-			ProcessAliveMessage(subMessage)
-		case SUSPECT_MODE:
-			ProcessSuspectModeMessage(subMessage)
-		case DROPOUT:
-			ProcessDropoutMessage(subMessage)
 		default:
 			log.Fatalf("Unexpected submessage kind in ACK")
 		}
@@ -174,28 +141,6 @@ func ExitGroup() {
 		}
 	}
 
-	// TODO close the log file
-
 	os.Exit(0)
 
-}
-
-func StartSuspecting() {
-	fmt.Println("Enabling Suspicion")
-	suspectMessage := Message{Kind: SUSPECT_MODE, Data: "true"}
-	ProcessSuspectModeMessage(suspectMessage)
-	AddPiggybackMessage(suspectMessage)
-}
-
-func StopSuspecting() {
-	fmt.Println("Disabling Suspicion")
-	suspectMessage := Message{Kind: SUSPECT_MODE, Data: "false"}
-	ProcessSuspectModeMessage(suspectMessage)
-	AddPiggybackMessage(suspectMessage)
-}
-
-func SetDropout(dropoutCommand string) {
-	dropoutMessage := Message{Kind: DROPOUT, Data: dropoutCommand}
-	ProcessDropoutMessage(dropoutMessage)
-	AddPiggybackMessage(dropoutMessage)
 }

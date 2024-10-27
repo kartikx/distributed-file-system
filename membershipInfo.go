@@ -4,7 +4,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 )
 
@@ -34,11 +33,9 @@ func AddNewMemberToMembershipInfo(nodeId string) error {
 	defer membershipInfoMutex.Unlock()
 
 	membershipInfo[nodeId] = MemberInfo{
-		connection:  &conn,
-		host:        ipAddr,
-		failed:      false,
-		suspected:   false,
-		incarnation: 0,
+		connection: &conn,
+		host:       ipAddr,
+		failed:     false,
 	}
 
 	LogMessage(fmt.Sprintf("JOIN NODE: %s", nodeId))
@@ -111,55 +108,4 @@ func DeleteMember(nodeId string) {
 	delete(membershipInfo, nodeId)
 
 	LogMessage(fmt.Sprintf("DELETE NODE: %s", nodeId))
-}
-
-func UpdateMemberIncarnation(nodeId string, incarnation int) {
-	membershipInfoMutex.Lock()
-	defer membershipInfoMutex.Unlock()
-
-	member := membershipInfo[nodeId]
-	if member.incarnation < incarnation {
-		member.incarnation = incarnation
-		member.suspected = false
-	}
-	membershipInfo[nodeId] = member
-
-	LogMessage(fmt.Sprintf("UPDATE INCARNATION FOR NODE: %s", nodeId))
-}
-
-func MarkMemberSuspected(nodeId string) {
-	membershipInfoMutex.Lock()
-	defer membershipInfoMutex.Unlock()
-
-	member := membershipInfo[nodeId]
-	member.suspected = true
-	membershipInfo[nodeId] = member
-
-	fmt.Println("Suspected node:", nodeId)
-
-	LogMessage(fmt.Sprintf("SUSPECT NODE: %s", nodeId))
-}
-
-func PrintSuspectedNodes() {
-	if !inSuspectMode {
-		fmt.Println("Suspicion is not enabled.")
-		return
-	}
-
-	membershipInfoMutex.RLock()
-	defer membershipInfoMutex.RUnlock()
-
-	var suspects []string
-
-	for k, v := range membershipInfo {
-		if v.suspected {
-			suspects = append(suspects, k)
-		}
-	}
-
-	if len(suspects) > 0 {
-		fmt.Printf("Suspected Nodes: [%s]\n", strings.Join(suspects, ","))
-	} else {
-		fmt.Printf("No nodes being suspected.\n")
-	}
 }

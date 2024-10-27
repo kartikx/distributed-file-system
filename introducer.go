@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strconv"
-	"strings"
 )
 
 func IntroduceYourself() (map[string]MemberInfo, *net.Conn, error) {
@@ -52,16 +50,7 @@ func parseMembersFromJoinResponse(buffer []byte) (map[string]MemberInfo, error) 
 		return nil, err
 	}
 
-	membersEnc := []byte(messages[0].Data)                 // First message is a "JOIN" with membership info
-	inSuspectMode, _ = strconv.ParseBool(messages[1].Data) // Second piggyback message is a "SUSPECT_MODE"
-
-	dropoutRateValue := strings.Split(messages[2].Data, " ")[1] // Third piggyback message is a "DROPOUT"
-	dropoutRate, _ := strconv.ParseFloat(strings.TrimSpace(dropoutRateValue), 64)
-	if err != nil {
-		dropRate = 0.0
-	} else {
-		dropRate = dropoutRate
-	}
+	membersEnc := []byte(messages[0].Data) // First message is a "JOIN" with membership info
 
 	if err != nil {
 		LogError("Unable to decode the initial suspect state")
@@ -88,11 +77,9 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 		if ip == INTRODUCER_SERVER_HOST {
 			// TODO kartikr2 using pointers, ensure that it works fine.
 			AddToMembershipInfo(id, &MemberInfo{
-				connection:  introducer_conn,
-				host:        ip,
-				failed:      memberInfo.failed,
-				suspected:   memberInfo.suspected,
-				incarnation: memberInfo.incarnation,
+				connection: introducer_conn,
+				host:       ip,
+				failed:     memberInfo.failed,
 			})
 		} else if ip == localIP {
 			nodeId = id
@@ -105,11 +92,9 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 			}
 
 			AddToMembershipInfo(id, &MemberInfo{
-				connection:  &conn,
-				host:        ip,
-				failed:      memberInfo.failed,
-				suspected:   memberInfo.suspected,
-				incarnation: memberInfo.incarnation,
+				connection: &conn,
+				host:       ip,
+				failed:     memberInfo.failed,
 			})
 		}
 	}
@@ -133,11 +118,9 @@ func IntroduceNodeToGroup(request string, addr *net.UDPAddr) (Message, error) {
 
 	// For the response, add yourself to the list as well.
 	membershipListResponse[NODE_ID] = MemberInfo{
-		connection:  nil,
-		host:        NODE_ID,
-		failed:      false,
-		suspected:   false,
-		incarnation: INCARNATION,
+		connection: nil,
+		host:       NODE_ID,
+		failed:     false,
 	}
 
 	membershipListEnc, err := json.Marshal(membershipListResponse)
