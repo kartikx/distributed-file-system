@@ -20,7 +20,8 @@ type MemberInfo struct {
 	connection *net.Conn
 	host       string
 	// TODO are we ever using this failed bool?
-	failed bool
+	failed       bool
+	ringPosition int
 }
 
 type MessageType int32
