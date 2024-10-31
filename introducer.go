@@ -17,6 +17,7 @@ func IntroduceYourself() (map[string]MemberInfo, *net.Conn, error) {
 		return nil, nil, err
 	}
 
+	// TODO @kartikr2 Once standard ping-ack implementations are re-verified, remove these logs.
 	var joinMessage Message
 	_ = json.Unmarshal(joinMessageEnc, &joinMessage)
 	localIP, _ := GetLocalIP()
@@ -75,12 +76,11 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 		ip := GetIPFromID(id)
 
 		if ip == INTRODUCER_SERVER_HOST {
-			// TODO kartikr2 using pointers, ensure that it works fine.
 			AddToMembershipInfo(id, &MemberInfo{
 				connection:   introducer_conn,
 				host:         ip,
 				failed:       memberInfo.failed,
-				ringPosition: CalculatePointOnRing(id),
+				ringPosition: memberInfo.ringPosition,
 			})
 		} else if ip == localIP {
 			nodeId = id
@@ -89,14 +89,15 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 
 			if err != nil {
 				LogError(fmt.Sprintf("Failed to estabilish connection with: %s", id))
-				// TODO what to do here? If it actually failed it should be detected by some other node.
+				// A node failed while another node was joining the system. Skip adding this node.
+				continue
 			}
 
 			AddToMembershipInfo(id, &MemberInfo{
 				connection:   &conn,
 				host:         ip,
 				failed:       memberInfo.failed,
-				ringPosition: CalculatePointOnRing(id),
+				ringPosition: memberInfo.ringPosition,
 			})
 		}
 	}
@@ -119,6 +120,7 @@ func IntroduceNodeToGroup(request string, addr *net.UDPAddr) (Message, error) {
 	membershipListResponse := GetMembers()
 
 	// For the response, add yourself to the list as well.
+	// ! @kartikr2 This isn't using the lock.
 	membershipListResponse[NODE_ID] = MemberInfo{
 		connection:   nil,
 		host:         NODE_ID,
@@ -131,7 +133,6 @@ func IntroduceNodeToGroup(request string, addr *net.UDPAddr) (Message, error) {
 		return Message{}, err
 	}
 
-	// TODO is it okay for the kind of this message to be "JOIN"?
 	response := Message{
 		Kind: JOIN,
 		Data: string(membershipListEnc),

@@ -33,7 +33,6 @@ func main() {
 	// introducer can make a connection to this node.
 	go startServer(clientServerChan)
 
-	// TODO @sdevata2 write a logging abstraction to direct all logs into a file.
 	LOCAL_IP, err := GetLocalIP()
 	if err != nil {
 		log.Fatalf("Unable to get local IP")

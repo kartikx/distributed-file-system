@@ -7,7 +7,6 @@ import (
 	"sync"
 )
 
-// TODO Rename to use capital M after merge.
 var membershipInfo map[string]MemberInfo = make(map[string]MemberInfo)
 
 var membershipInfoMutex = sync.RWMutex{}
@@ -61,8 +60,8 @@ func PrintMembershipInfo() {
 	membershipInfoMutex.RLock()
 	defer membershipInfoMutex.RUnlock()
 
-	for k := range membershipInfo {
-		fmt.Printf("NODE ID: %s\n", k)
+	for k, v := range membershipInfo {
+		fmt.Printf("NODE ID: %s RING POSITION: %s\n", k, v.ringPosition)
 	}
 }
 
