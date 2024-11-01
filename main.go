@@ -6,26 +6,18 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"time"
 )
 
 var NODE_ID = ""
 var LOCAL_IP = ""
+var RING_POSITION = -1
 
 var isIntroducer = false
 
 func main() {
-
-	test_string := "asekjj;lkjjjkkkkddd"
-	test := CalculatePointOnRing(test_string)
-	fmt.Println(test_string)
-	fmt.Println(test)
-
-	returnNodeIDs, err := GetNodesOnRingForPoint(10)
-	fmt.Println(returnNodeIDs, err)
-	os.Exit(0)
-
 	// Synchronizes start of client and server.
 	clientServerChan := make(chan int, 5)
 
@@ -42,6 +34,9 @@ func main() {
 		isIntroducer = true
 	}
 
+	// TODO @kartikramesh Move this into a separate function
+	// TODO Add functionality to clean-up files from prior runs before you enter the system.
+	// TODO Add functionality to fetch files to replicate.
 	if !isIntroducer {
 		members, introducer_conn, err := IntroduceYourself()
 		if err != nil {
@@ -58,6 +53,7 @@ func main() {
 		AddPiggybackMessage(helloMessage)
 	} else {
 		NODE_ID = ConstructNodeID(INTRODUCER_SERVER_HOST)
+		RING_POSITION = GetRingPosition(NODE_ID)
 	}
 
 	clientServerChan <- 1
@@ -85,17 +81,28 @@ func main() {
 			demoInstruction = scanner.Text()
 		}
 
+		demoArgs := strings.Split(demoInstruction, " ")
+
 		switch {
-		case strings.Contains(demoInstruction, "list_mem"):
+		case demoArgs[0] == "list_mem":
 			PrintMembershipInfo()
-		case strings.Contains(demoInstruction, "list_self"):
-			fmt.Printf("ID: %s\n", NODE_ID)
-		case strings.Contains(demoInstruction, "piggybacks"):
+		case demoArgs[0] == "list_self":
+			fmt.Printf("ID: %s POINT: %d \n", NODE_ID, RING_POSITION)
+		case demoArgs[0] == "piggybacks":
 			PrintPiggybackMessages()
-		case strings.Contains(demoInstruction, "leave"):
+		case demoArgs[0] == "leave":
 			ExitGroup()
-		case strings.Contains(demoInstruction, "meta_info"):
+		case demoArgs[0] == "meta_info":
 			fmt.Printf("ID: %s\n", NODE_ID)
+		case demoArgs[0] == "create":
+			ringPos, _ := strconv.Atoi(demoArgs[2])
+			CreateLocalFile(demoArgs[1], ringPos, []byte{})
+		case demoArgs[0] == "print_succ":
+			GetRingSuccessors(RING_POSITION)
+		case demoArgs[0] == "print_ring":
+			PrintRing()
+		case demoArgs[0] == "store":
+			PrintStoredFiles()
 		}
 	}
 }

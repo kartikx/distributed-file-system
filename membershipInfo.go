@@ -11,6 +11,11 @@ var membershipInfo map[string]MemberInfo = make(map[string]MemberInfo)
 
 var membershipInfoMutex = sync.RWMutex{}
 
+type RingMemberInfo struct {
+	Id           string
+	RingPosition int
+}
+
 func AddNewMemberToMembershipInfo(nodeId string) error {
 	ipAddr := GetIPFromID(nodeId)
 
@@ -33,9 +38,9 @@ func AddNewMemberToMembershipInfo(nodeId string) error {
 
 	membershipInfo[nodeId] = MemberInfo{
 		connection:   &conn,
-		host:         ipAddr,
+		Host:         ipAddr,
 		failed:       false,
-		ringPosition: CalculatePointOnRing(nodeId),
+		RingPosition: GetRingPosition(nodeId),
 	}
 
 	LogMessage(fmt.Sprintf("JOIN NODE: %s", nodeId))
@@ -56,12 +61,25 @@ func GetMembers() map[string]MemberInfo {
 	return members
 }
 
+func GetMemberAndRingPositions() []RingMemberInfo {
+	membershipInfoMutex.RLock()
+	defer membershipInfoMutex.RUnlock()
+
+	members := make([]RingMemberInfo, 0, len(membershipInfo))
+
+	for k, v := range membershipInfo {
+		members = append(members, RingMemberInfo{k, v.RingPosition})
+	}
+
+	return members
+}
+
 func PrintMembershipInfo() {
 	membershipInfoMutex.RLock()
 	defer membershipInfoMutex.RUnlock()
 
 	for k, v := range membershipInfo {
-		fmt.Printf("NODE ID: %s RING POSITION: %s\n", k, v.ringPosition)
+		fmt.Printf("NODE ID: %s RING POSITION: %d\n", k, v.RingPosition)
 	}
 }
 

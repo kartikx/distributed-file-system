@@ -74,16 +74,18 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 
 	for id, memberInfo := range members {
 		ip := GetIPFromID(id)
+		fmt.Printf("ID: %s Position: %d\n", id, memberInfo.RingPosition)
 
 		if ip == INTRODUCER_SERVER_HOST {
 			AddToMembershipInfo(id, &MemberInfo{
 				connection:   introducer_conn,
-				host:         ip,
+				Host:         ip,
 				failed:       memberInfo.failed,
-				ringPosition: memberInfo.ringPosition,
+				RingPosition: memberInfo.RingPosition,
 			})
 		} else if ip == localIP {
 			nodeId = id
+			RING_POSITION = memberInfo.RingPosition
 		} else {
 			conn, err := net.Dial("udp", GetServerEndpoint(ip))
 
@@ -95,9 +97,9 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 
 			AddToMembershipInfo(id, &MemberInfo{
 				connection:   &conn,
-				host:         ip,
+				Host:         ip,
 				failed:       memberInfo.failed,
-				ringPosition: memberInfo.ringPosition,
+				RingPosition: memberInfo.RingPosition,
 			})
 		}
 	}
@@ -123,9 +125,9 @@ func IntroduceNodeToGroup(request string, addr *net.UDPAddr) (Message, error) {
 	// ! @kartikr2 This isn't using the lock.
 	membershipListResponse[NODE_ID] = MemberInfo{
 		connection:   nil,
-		host:         NODE_ID,
+		Host:         NODE_ID,
 		failed:       false,
-		ringPosition: CalculatePointOnRing(NODE_ID),
+		RingPosition: RING_POSITION,
 	}
 
 	membershipListEnc, err := json.Marshal(membershipListResponse)
@@ -138,13 +140,13 @@ func IntroduceNodeToGroup(request string, addr *net.UDPAddr) (Message, error) {
 		Data: string(membershipListEnc),
 	}
 
-	// // Introducer should also disseminate the message.
-	// helloMessage := Message{
-	// 	Kind: HELLO,
-	// 	Data: nodeId,
-	// }
+	predecessorId := GetRingPredecessor(RING_POSITION)
+	if predecessorId == nodeId {
+		filesToSend := FilterFilesForRingPosition(GetRingPosition(predecessorId))
+		fmt.Printf("Send files [%s] to Node[%s]\n", filesToSend, nodeId)
+	}
 
-	// AddPiggybackMessage(helloMessage)
+	// Note, adding introducer dissemination here could have implications if new node isn't ready to receive messages just yet.
 
 	return response, err
 }

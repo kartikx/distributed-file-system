@@ -4,8 +4,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"time"
 )
@@ -113,6 +115,39 @@ func handleEachMember(nodeId string) {
 		}
 	}
 
+}
+
+func SendReplicationMessage(nodeId string, fileInfo FileInfo) error {
+	message := Message{Kind: REPLICATE, Data: fileInfo.Name}
+
+	encodedMessage, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+
+	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	if err != nil {
+		return err
+	}
+
+	member, membererr := GetMemberInfo(nodeId)
+	if member.failed || !membererr {
+		return errors.New("unable to get member info")
+	}
+
+	if connection == nil {
+		return errors.New("node connection is nil")
+	}
+
+	connection.Write(encodedMessage)
+	buffer := make([]byte, 8192)
+
+	_, err = connection.Read(buffer)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func ExitGroup() {

@@ -72,6 +72,8 @@ func startServer(clientServerChan chan int) {
 			messagesToPiggyback = Messages{responseMessage}
 		case LEAVE:
 			ProcessFailOrLeaveMessage(message)
+		case REPLICATE:
+			ProcessReplicateMessage(message)
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
 		}
@@ -88,7 +90,7 @@ func startServer(clientServerChan chan int) {
 			LogError("Unable to decode outgoing ACK message")
 			continue
 		}
-		PrintMessage("outgoing", message, "")
+		PrintMessage("outgoing", ackMessage, "")
 
 		server.WriteToUDP(ackResponse, address)
 	}
@@ -108,7 +110,6 @@ func ProcessJoinMessage(message Message, addr *net.UDPAddr) (Message, error) {
 func ProcessHelloMessage(message Message) error {
 	PrintMessage("incoming", message, "")
 
-	// For the hello message, nodeId is expected to be the node Id.
 	nodeId := message.Data
 
 	_, ok := GetMemberInfo(nodeId)
@@ -126,6 +127,12 @@ func ProcessHelloMessage(message Message) error {
 	err := AddNewMemberToMembershipInfo(nodeId)
 	if err != nil {
 		return err
+	}
+
+	predecessorId := GetRingPredecessor(RING_POSITION)
+	if predecessorId == nodeId {
+		filesToSend := FilterFilesForRingPosition(GetRingPosition(predecessorId))
+		fmt.Printf("Send files [%s] to Node[%s]\n", filesToSend, nodeId)
 	}
 
 	AddPiggybackMessage(message)
@@ -156,5 +163,15 @@ func ProcessFailOrLeaveMessage(message Message) error {
 		return nil
 	}
 
+	return nil
+}
+
+func ProcessReplicateMessage(message Message) error {
+	PrintMessage("incoming", message, "")
+
+	// TODO Should also contain an encoded content. Empty for now.
+	fileName := message.Data
+
+	ReplicateFile(fileName, []byte{})
 	return nil
 }

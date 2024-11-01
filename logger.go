@@ -65,12 +65,15 @@ func PrintMessage(direction string, message Message, nodeId string) {
 		fmt.Fprintf(log_file_writer, "[%s] [%s] ********Trying to print unknown message type**********", currentTime, direction)
 	}
 	fmt.Fprintf(log_file_writer, "---------\n")
+	log_file_writer.Flush()
 }
 
 func LogMessage(message string) {
 	fmt.Fprintf(log_file_writer, "[%s] %s\n", time.Now().Format(time.TimeOnly), message)
+	log_file_writer.Flush()
 }
 
 func LogError(message string) {
 	fmt.Fprintf(log_file_writer, "[%s] ERROR: %s\n", time.Now().Format(time.TimeOnly), message)
+	log_file_writer.Flush()
 }

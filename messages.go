@@ -7,21 +7,25 @@ import (
 
 const (
 	// Top level message types.
-	PING MessageType = 0
-	ACK  MessageType = 1
-	JOIN MessageType = 2
+	PING      MessageType = 0
+	ACK       MessageType = 1
+	JOIN      MessageType = 2
+	CREATE    MessageType = 3
+	REPLICATE MessageType = 4
+
 	// Piggybacked message types.
-	LEAVE MessageType = 3
-	FAIL  MessageType = 4
-	HELLO MessageType = 5
+	LEAVE MessageType = 16
+	FAIL  MessageType = 17
+	HELLO MessageType = 18
 )
 
 type MemberInfo struct {
 	connection *net.Conn
-	host       string
-	// TODO are we ever using this failed bool?
-	failed       bool
-	ringPosition int
+	failed     bool
+
+	// Exported variables
+	Host         string
+	RingPosition int
 }
 
 type MessageType int32
