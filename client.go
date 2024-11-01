@@ -25,25 +25,23 @@ func startClient(clientServerChan chan int) {
 		Shuffle(member_ids)
 
 		for _, nodeId := range member_ids {
-			go handleEachMember(nodeId)
+			go PingMember(nodeId)
 			time.Sleep(PING_INTERVAL_MILLISECONDS * time.Millisecond)
 		}
 	}
 }
 
-func handleEachMember(nodeId string) {
-
-	connection := GetNodeConnection(nodeId)
-
-	member, membererr := GetMemberInfo(nodeId)
-	if member.failed || !membererr {
-		return
-	}
-
-	if connection == nil {
+func PingMember(nodeId string) {
+	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	if err != nil {
 		LogError(fmt.Sprintf("Node %s connection is nil, it might have been removed from the group\n",
 			nodeId))
 		DeleteMember(nodeId)
+	}
+	defer connection.Close()
+
+	member, membererr := GetMemberInfo(nodeId)
+	if member.failed || !membererr {
 		return
 	}
 
@@ -129,6 +127,7 @@ func SendReplicationMessage(nodeId string, fileInfo FileInfo) error {
 	if err != nil {
 		return err
 	}
+	defer connection.Close()
 
 	member, membererr := GetMemberInfo(nodeId)
 	if member.failed || !membererr {
@@ -162,7 +161,8 @@ func ExitGroup() {
 
 	members := GetMembers()
 	for nodeId := range members {
-		connection := GetNodeConnection(nodeId)
+		connection, _ := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+
 		if connection != nil {
 			var leaveMessage Message
 			err = json.Unmarshal(leaveMessageEnc, &leaveMessage)
@@ -177,5 +177,4 @@ func ExitGroup() {
 	}
 
 	os.Exit(0)
-
 }

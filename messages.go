@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"net"
 )
 
 const (
@@ -20,8 +19,8 @@ const (
 )
 
 type MemberInfo struct {
-	connection *net.Conn
-	failed     bool
+	// TODO @kartikr2 Remove if unused.
+	failed bool
 
 	// Exported variables
 	Host         string

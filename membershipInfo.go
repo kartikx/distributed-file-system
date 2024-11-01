@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"sync"
 )
 
@@ -28,16 +27,10 @@ func AddNewMemberToMembershipInfo(nodeId string) error {
 	LogMessage(fmt.Sprintf("Adding new member to info %s %s %s %s\n",
 		nodeId, NODE_ID, ipAddr, LOCAL_IP))
 
-	conn, err := net.Dial("udp", GetServerEndpoint(ipAddr))
-	if err != nil {
-		return err
-	}
-
 	membershipInfoMutex.Lock()
 	defer membershipInfoMutex.Unlock()
 
 	membershipInfo[nodeId] = MemberInfo{
-		connection:   &conn,
 		Host:         ipAddr,
 		failed:       false,
 		RingPosition: GetRingPosition(nodeId),
@@ -81,19 +74,6 @@ func PrintMembershipInfo() {
 	for k, v := range membershipInfo {
 		fmt.Printf("NODE ID: %s RING POSITION: %d\n", k, v.RingPosition)
 	}
-}
-
-func GetNodeConnection(nodeId string) net.Conn {
-	membershipInfoMutex.RLock()
-	defer membershipInfoMutex.RUnlock()
-
-	conn := membershipInfo[nodeId].connection
-
-	if conn == nil {
-		return nil
-	}
-
-	return *conn
 }
 
 func AddToMembershipInfo(nodeId string, member *MemberInfo) {

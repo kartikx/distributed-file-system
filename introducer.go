@@ -78,7 +78,6 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 
 		if ip == INTRODUCER_SERVER_HOST {
 			AddToMembershipInfo(id, &MemberInfo{
-				connection:   introducer_conn,
 				Host:         ip,
 				failed:       memberInfo.failed,
 				RingPosition: memberInfo.RingPosition,
@@ -87,16 +86,7 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 			nodeId = id
 			RING_POSITION = memberInfo.RingPosition
 		} else {
-			conn, err := net.Dial("udp", GetServerEndpoint(ip))
-
-			if err != nil {
-				LogError(fmt.Sprintf("Failed to estabilish connection with: %s", id))
-				// A node failed while another node was joining the system. Skip adding this node.
-				continue
-			}
-
 			AddToMembershipInfo(id, &MemberInfo{
-				connection:   &conn,
 				Host:         ip,
 				failed:       memberInfo.failed,
 				RingPosition: memberInfo.RingPosition,
@@ -124,7 +114,6 @@ func IntroduceNodeToGroup(request string, addr *net.UDPAddr) (Message, error) {
 	// For the response, add yourself to the list as well.
 	// ! @kartikr2 This isn't using the lock.
 	membershipListResponse[NODE_ID] = MemberInfo{
-		connection:   nil,
 		Host:         NODE_ID,
 		failed:       false,
 		RingPosition: RING_POSITION,
