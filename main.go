@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -74,6 +73,7 @@ func main() {
 	}()
 
 	// TODO make this more elaborate and in-line with demo expectations.
+	// Would be nice to move this into a separate file.
 	for {
 		var demoInstruction string
 		scanner := bufio.NewScanner(os.Stdin)
@@ -95,8 +95,12 @@ func main() {
 		case demoArgs[0] == "meta_info":
 			fmt.Printf("ID: %s\n", NODE_ID)
 		case demoArgs[0] == "create":
-			ringPos, _ := strconv.Atoi(demoArgs[2])
-			CreateLocalFile(demoArgs[1], ringPos, []byte{})
+			err = CreateHDFSFile(demoArgs[1], []byte{})
+			if err == nil {
+				fmt.Println("Creation completed")
+			} else {
+				fmt.Println("Error while creating file: ", err.Error())
+			}
 		case demoArgs[0] == "print_succ":
 			GetRingSuccessors(RING_POSITION)
 		case demoArgs[0] == "print_ring":

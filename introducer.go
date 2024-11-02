@@ -129,12 +129,6 @@ func IntroduceNodeToGroup(request string, addr *net.UDPAddr) (Message, error) {
 		Data: string(membershipListEnc),
 	}
 
-	predecessorId := GetRingPredecessor(RING_POSITION)
-	if predecessorId == nodeId {
-		filesToSend := FilterFilesForRingPosition(GetRingPosition(predecessorId))
-		fmt.Printf("Send files [%s] to Node[%s]\n", filesToSend, nodeId)
-	}
-
 	// Note, adding introducer dissemination here could have implications if new node isn't ready to receive messages just yet.
 
 	return response, err

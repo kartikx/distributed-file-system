@@ -4,7 +4,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -115,8 +114,42 @@ func PingMember(nodeId string) {
 
 }
 
-func SendReplicationMessage(nodeId string, fileInfo FileInfo) error {
+func SendReplicationMessage(nodeId string, fileInfo FileInfo, ch chan error) {
+	// TODO @kartikr2 Encapsulate with file content.
 	message := Message{Kind: REPLICATE, Data: fileInfo.Name}
+
+	encodedMessage, err := json.Marshal(message)
+	if err != nil {
+		ch <- err
+		return
+	}
+
+	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	if err != nil {
+		ch <- err
+		return
+	}
+	defer connection.Close()
+
+	connection.Write(encodedMessage)
+	buffer := make([]byte, 8192)
+
+	mLen, err := connection.Read(buffer)
+	if err != nil {
+		ch <- err
+		return
+	}
+
+	// TODO Could there be 200 OK with 400 inside.
+	response := string(buffer[:mLen])
+	fmt.Println("Replicated response: ", response)
+
+	ch <- nil
+}
+
+func SendFileCreationMessage(nodeId string, filename string, content []byte) error {
+	// TODO @kartikr2 Include file content inside.
+	message := Message{Kind: CREATE, Data: filename}
 
 	encodedMessage, err := json.Marshal(message)
 	if err != nil {
@@ -129,22 +162,16 @@ func SendReplicationMessage(nodeId string, fileInfo FileInfo) error {
 	}
 	defer connection.Close()
 
-	member, membererr := GetMemberInfo(nodeId)
-	if member.failed || !membererr {
-		return errors.New("unable to get member info")
-	}
-
-	if connection == nil {
-		return errors.New("node connection is nil")
-	}
-
 	connection.Write(encodedMessage)
 	buffer := make([]byte, 8192)
 
-	_, err = connection.Read(buffer)
+	mLen, err := connection.Read(buffer)
 	if err != nil {
 		return err
 	}
+
+	response := string(buffer[:mLen])
+	fmt.Println("Replicated response: ", response)
 
 	return nil
 }

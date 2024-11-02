@@ -6,6 +6,8 @@ import (
 	"sort"
 )
 
+// TODO @kartikr2 Do we need failed now?
+
 func GetRingPosition(nodeId string) int {
 	hashObject := fnv.New64a()
 	hashObject.Write([]byte(nodeId))
@@ -30,7 +32,7 @@ func GetSortedRingMembers() []RingMemberInfo {
 func GetRingSuccessors(ringPosition int) []string {
 	var successorNodeIds []string
 
-	members := GetSortedRingMembers()
+	var members []RingMemberInfo = GetSortedRingMembers()
 
 	// TODO What to do if numNodes <= 2?
 
@@ -39,6 +41,7 @@ func GetRingSuccessors(ringPosition int) []string {
 		index++
 	}
 
+	// ! If you spot failed nodes in replicas, add check here.
 	for i := 0; i < NUM_REPLICAS-1; i++ {
 		successorNodeIds = append(successorNodeIds, members[(index+i+1)%len(members)].Id)
 	}
@@ -55,6 +58,19 @@ func GetRingPredecessor(ringPosition int) string {
 	}
 
 	return members[(index+len(members)-1)%len(members)].Id
+}
+
+func GetPrimaryReplicaForFile(filename string) string {
+	fileHash := GetRingPosition(filename)
+
+	members := GetSortedRingMembers()
+
+	index := 0
+	for index < len(members) && members[index].RingPosition < fileHash {
+		index++
+	}
+
+	return members[index%len(members)].Id
 }
 
 func PrintRing() {

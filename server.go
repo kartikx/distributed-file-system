@@ -36,10 +36,11 @@ func startServer(clientServerChan chan int) {
 		var message Message
 		json.Unmarshal(buf[:mlen], &message)
 
-		var messagesToPiggyback = GetUnexpiredPiggybackMessages()
+		var messagesToPiggyback Messages
 
 		switch message.Kind {
 		case PING:
+			messagesToPiggyback = GetUnexpiredPiggybackMessages()
 			PrintMessage("Incoming", message, address.IP.String())
 			var messages Messages
 			err = json.Unmarshal([]byte(message.Data), &messages)
@@ -71,9 +72,15 @@ func startServer(clientServerChan chan int) {
 			// Piggyback the JOIN message
 			messagesToPiggyback = Messages{responseMessage}
 		case LEAVE:
+			messagesToPiggyback = GetUnexpiredPiggybackMessages()
 			ProcessFailOrLeaveMessage(message)
 		case REPLICATE:
-			ProcessReplicateMessage(message)
+			// Replicate does not piggyback anything.
+
+			// TODO If there is an error we can indicate this to the client appropriately.
+			err = ProcessReplicateMessage(message)
+		case CREATE:
+			err = ProcessCreateMessage(message)
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
 		}
@@ -129,12 +136,6 @@ func ProcessHelloMessage(message Message) error {
 		return err
 	}
 
-	predecessorId := GetRingPredecessor(RING_POSITION)
-	if predecessorId == nodeId {
-		filesToSend := FilterFilesForRingPosition(GetRingPosition(predecessorId))
-		fmt.Printf("Send files [%s] to Node[%s]\n", filesToSend, nodeId)
-	}
-
 	AddPiggybackMessage(message)
 
 	return nil
@@ -173,5 +174,15 @@ func ProcessReplicateMessage(message Message) error {
 	fileName := message.Data
 
 	ReplicateFile(fileName, []byte{})
+	return nil
+}
+
+func ProcessCreateMessage(message Message) error {
+	PrintMessage("incoming", message, "")
+
+	// TODO Should also contain an encoded content. Empty for now.
+	fileName := message.Data
+
+	CreateLocalFile(fileName, []byte{})
 	return nil
 }

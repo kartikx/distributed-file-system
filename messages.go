@@ -37,12 +37,12 @@ type Message struct {
 
 type Messages []Message
 
-type PiggbackMessage struct {
+type PiggybackMessage struct {
 	message Message
 	ttl     int
 }
 
-type PiggybackMessages []PiggbackMessage
+type PiggybackMessages []PiggybackMessage
 
 func GetEncodedJoinMessage() ([]byte, error) {
 	joinMessage := Message{Kind: JOIN, Data: ""}
