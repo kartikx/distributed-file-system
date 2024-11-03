@@ -2,22 +2,46 @@ package main
 
 import "fmt"
 
-var files []FileInfo
+var fileInfoMap = map[string]*FileInfo{}
 
 type FileInfo struct {
-	Name      string
-	Content   []byte
-	IsPrimary bool
+	Name    string
+	Content []byte
+	// Shouldn't be exported, because different nodes will have different isPrimary values for the same file.
+	isPrimary bool
+}
+
+// Checks whether this node has become the primary replica for any file.
+// Membership Info should have been updated before invoking this function.
+// Returns primary replicas.
+func UpdatePrimaryReplicas() []*FileInfo {
+	fmt.Println("Updating primary replicas")
+	var filenames []*FileInfo
+
+	for _, f := range fileInfoMap {
+		if !f.isPrimary && GetPrimaryReplicaForFile(f.Name) == NODE_ID {
+			// f is a pointer so this is ok
+			f.isPrimary = true
+		}
+
+		if f.isPrimary {
+			filenames = append(filenames, f)
+		}
+	}
+
+	return filenames
 }
 
 func PrintStoredFiles() {
-	for i, f := range files {
+	fmt.Println("===STORED FILES===")
+	for name, file := range fileInfoMap {
 		var ch string
-		if f.IsPrimary {
+		if file.isPrimary {
 			ch = "*"
 		}
-		fmt.Printf("%d %s %s\n", i+1, f.Name, ch)
+		fmt.Printf("%s %s\n", name, ch)
 	}
+	fmt.Println("===")
 }
 
 func CreateHDFSFile(filename string, content []byte) error {
@@ -32,34 +56,67 @@ func CreateHDFSFile(filename string, content []byte) error {
 	}
 }
 
-// Creates file on local disk, sends 2 replication requests.
+// Creates file on local disk and triggers replication.
 func CreateLocalFile(filename string, content []byte) error {
 	fmt.Printf("Creating file with name: %s and content: [%s] \n", filename, string(content))
-	fileInfo := FileInfo{filename, content, true}
-	files = append(files, fileInfo)
 
-	// Replicate on 2 successors, we wait on response from one.
-	ch := make(chan error, 2)
-	successors := GetRingSuccessors(RING_POSITION)
-	for _, succ := range successors {
-		fmt.Println("Send replication request to: ", succ)
+	fileInfo := &FileInfo{filename, content, true}
 
-		go SendReplicationMessage(succ, fileInfo, ch)
-	}
+	// TODO @kartikr2 Throw error if file already exists. Should be propagated across the network.
+	StoreFileLocally(fileInfo)
 
-	err := <-ch
-	if err == nil {
-		return nil
-	}
+	// ? @kartikr2 Should we wait on both successors? We want to ensure there are two replicas.
+	err := ReplicateFiles([]*FileInfo{fileInfo})
 
-	// If there is an error from the previous connection, try again.
-	err = <-ch
 	return err
 }
 
-func ReplicateFile(filename string, content []byte) {
-	fmt.Printf("Replicating file with name: %s and content: [%s] \n", filename, string(content))
+func StoreFileLocally(fileInfo *FileInfo) error {
+	fmt.Printf("Replicating file with name: %s and content: [%s] \n", fileInfo.Name, string(fileInfo.Content))
 
-	// TODO Add to fileinfos however way you want.
-	files = append(files, FileInfo{filename, content, false})
+	_, ok := fileInfoMap[fileInfo.Name]
+
+	if !ok {
+		fileInfoMap[fileInfo.Name] = fileInfo
+
+		// TODO Store file and contents on disk.
+	}
+
+	// TODO could throw an error if file already exists.
+	return nil
+}
+
+// Gets files for which this node is the primary replica.
+func GetPrimaryFiles() []*FileInfo {
+	var primaryFiles []*FileInfo
+	for _, file := range fileInfoMap {
+		if file.isPrimary {
+			primaryFiles = append(primaryFiles, file)
+		}
+	}
+	return primaryFiles
+}
+
+// This is used for both, replicate-on-create and replicate-on-fail
+// TODO This doesn't work if any of the successors is down, but hasn't been updated in the membership list yet.
+func ReplicateFiles(files []*FileInfo) error {
+	successors := GetRingSuccessors(RING_POSITION)
+
+	ch := make(chan error, 2)
+	for _, succ := range successors {
+		go SendReplicationMessages(succ, files, ch)
+	}
+
+	// Ensure two replications.
+	err := <-ch
+	if err != nil {
+		return err
+	}
+
+	err = <-ch
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

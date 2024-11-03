@@ -161,6 +161,10 @@ func ProcessFailOrLeaveMessage(message Message) error {
 		// disseminating info that the node left
 		AddPiggybackMessage(message)
 
+		// Update replicated files.
+		updatedPrimaryFiles := UpdatePrimaryReplicas()
+		ReplicateFiles(updatedPrimaryFiles)
+
 		return nil
 	}
 
@@ -170,19 +174,37 @@ func ProcessFailOrLeaveMessage(message Message) error {
 func ProcessReplicateMessage(message Message) error {
 	PrintMessage("incoming", message, "")
 
-	// TODO Should also contain an encoded content. Empty for now.
-	fileName := message.Data
+	encodedFiles := message.Data
 
-	ReplicateFile(fileName, []byte{})
+	var files []FileInfo
+	err := json.Unmarshal([]byte(encodedFiles), &files)
+
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		// This file was received over the network, ensure isPrimary is false for safety.
+		file.isPrimary = false
+
+		StoreFileLocally(&file)
+	}
+
 	return nil
 }
 
 func ProcessCreateMessage(message Message) error {
 	PrintMessage("incoming", message, "")
 
-	// TODO Should also contain an encoded content. Empty for now.
-	fileName := message.Data
+	encodedFileInfo := message.Data
 
-	CreateLocalFile(fileName, []byte{})
+	var fileInfo FileInfo
+
+	err := json.Unmarshal([]byte(encodedFileInfo), &fileInfo)
+	if err != nil {
+		return err
+	}
+
+	CreateLocalFile(fileInfo.Name, fileInfo.Content)
 	return nil
 }

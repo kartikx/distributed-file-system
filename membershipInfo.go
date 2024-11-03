@@ -106,5 +106,5 @@ func DeleteMember(nodeId string) {
 	delete(membershipInfo, nodeId)
 
 	LogMessage(fmt.Sprintf("DELETE NODE: %s", nodeId))
-	fmt.Printf("DELETE NODE: %s", nodeId)
+	fmt.Printf("DELETE NODE: %s\n", nodeId)
 }

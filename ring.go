@@ -77,6 +77,10 @@ func PrintRing() {
 	members := GetSortedRingMembers()
 
 	for i, m := range members {
-		fmt.Printf("%d NODE: %s RING POSITION: %d\n", i, m.Id, m.RingPosition)
+		selfIdentifierMarker := ""
+		if m.Id == NODE_ID {
+			selfIdentifierMarker = "<-"
+		}
+		fmt.Printf("%d NODE: %s RING POSITION: %d %s\n", i, m.Id, m.RingPosition, selfIdentifierMarker)
 	}
 }

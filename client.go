@@ -73,7 +73,12 @@ func PingMember(nodeId string) {
 		LogError(fmt.Sprintf("Error in reading from connection for nodeId [%s] Err: [%s]\n", nodeId, err))
 
 		LogMessage(fmt.Sprintf("DETECTED NODE %s as FAILED", nodeId))
+
+		// TODO DRY, wrap these two in a function together.
 		DeleteMember(nodeId)
+		updatedPrimaryFiles := UpdatePrimaryReplicas()
+		// Should we do this in a goroutine?
+		ReplicateFiles(updatedPrimaryFiles)
 
 		// Start propagating FAIL message.
 		failedMessage := Message{
@@ -114,9 +119,21 @@ func PingMember(nodeId string) {
 
 }
 
-func SendReplicationMessage(nodeId string, fileInfo FileInfo, ch chan error) {
-	// TODO @kartikr2 Encapsulate with file content.
-	message := Message{Kind: REPLICATE, Data: fileInfo.Name}
+// Sends replication requests for all files to the given node.
+// This is used for both, replicate-on-create and replicate-on-fail
+func SendReplicationMessages(nodeId string, files []*FileInfo, ch chan error) {
+	fmt.Printf("Sending %d Replication messages to %s\n", len(files), nodeId)
+
+	// TODO @kartikr2 We could potentially ask the node to reply  with the files that it has currently.
+	// and only send the ones it doesn't have.
+
+	encodedFiles, err := json.Marshal(files)
+	if err != nil {
+		ch <- err
+		return
+	}
+
+	message := Message{Kind: REPLICATE, Data: string(encodedFiles)}
 
 	encodedMessage, err := json.Marshal(message)
 	if err != nil {
@@ -134,22 +151,27 @@ func SendReplicationMessage(nodeId string, fileInfo FileInfo, ch chan error) {
 	connection.Write(encodedMessage)
 	buffer := make([]byte, 8192)
 
-	mLen, err := connection.Read(buffer)
+	_, err = connection.Read(buffer)
 	if err != nil {
 		ch <- err
 		return
 	}
 
-	// TODO Could there be 200 OK with 400 inside.
-	response := string(buffer[:mLen])
-	fmt.Println("Replicated response: ", response)
+	// TODO You could take a look at the response from the replica.
 
 	ch <- nil
 }
 
 func SendFileCreationMessage(nodeId string, filename string, content []byte) error {
 	// TODO @kartikr2 Include file content inside.
-	message := Message{Kind: CREATE, Data: filename}
+	fileInfo := FileInfo{filename, content, false}
+	encodedFileInfo, err := json.Marshal(fileInfo)
+
+	if err != nil {
+		return err
+	}
+
+	message := Message{Kind: CREATE, Data: string(encodedFileInfo)}
 
 	encodedMessage, err := json.Marshal(message)
 	if err != nil {
@@ -165,13 +187,13 @@ func SendFileCreationMessage(nodeId string, filename string, content []byte) err
 	connection.Write(encodedMessage)
 	buffer := make([]byte, 8192)
 
-	mLen, err := connection.Read(buffer)
+	_, err = connection.Read(buffer)
 	if err != nil {
 		return err
 	}
 
-	response := string(buffer[:mLen])
-	fmt.Println("Replicated response: ", response)
+	// response := string(buffer[:mLen])
+	// fmt.Println("Replicated response: ", response)
 
 	return nil
 }
