@@ -74,11 +74,10 @@ func PingMember(nodeId string) {
 
 		LogMessage(fmt.Sprintf("DETECTED NODE %s as FAILED", nodeId))
 
-		// TODO DRY, wrap these two in a function together.
-		DeleteMember(nodeId)
-		updatedPrimaryFiles := UpdatePrimaryReplicas()
-		// Should we do this in a goroutine?
-		ReplicateFiles(updatedPrimaryFiles)
+		// TODO @kartikr2 Remove
+		fmt.Printf("DETECTED NODE %s as FAILED\n", nodeId)
+
+		DeleteMemberAndReReplicate(nodeId)
 
 		// Start propagating FAIL message.
 		failedMessage := Message{

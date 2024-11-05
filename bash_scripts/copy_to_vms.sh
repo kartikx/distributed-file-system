@@ -4,5 +4,5 @@ declare -a allvms=("fa24-cs425-6401.cs.illinois.edu" "fa24-cs425-6402.cs.illinoi
 
 for each_vm_machine in "${allvms[@]}"
 do
-   scp -r ../../mp3-g64 "sdevata2@${each_vm_machine}:~/"
+   scp ./mp3 "kartikr2@${each_vm_machine}:~/mp3-g64"
 done

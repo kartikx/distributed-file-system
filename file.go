@@ -98,9 +98,13 @@ func GetPrimaryFiles() []*FileInfo {
 }
 
 // This is used for both, replicate-on-create and replicate-on-fail
-// TODO This doesn't work if any of the successors is down, but hasn't been updated in the membership list yet.
 func ReplicateFiles(files []*FileInfo) error {
 	successors := GetRingSuccessors(RING_POSITION)
+
+	// One of the two successors could additionally be down. This might happen when the second failure
+	// hasn't been reflected in the membership list yet.
+	// If this happens, we just let replicate fail on one of the nodes.
+	// Eventually, the membership list will be updated, and the updated successor will get the replicas.
 
 	ch := make(chan error, 2)
 	for _, succ := range successors {

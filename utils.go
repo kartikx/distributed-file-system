@@ -109,3 +109,12 @@ func Shuffle(slice []string) {
 		slice[i], slice[j] = slice[j], slice[i]
 	}
 }
+
+func DeleteMemberAndReReplicate(nodeID string) {
+	DeleteMember(nodeID)
+
+	updatedPrimaryFiles := UpdatePrimaryReplicas()
+
+	// ? Should we do this in a goroutine? This will wait for 2 replication to complete, what if it is too slow?
+	ReplicateFiles(updatedPrimaryFiles)
+}
