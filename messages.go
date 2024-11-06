@@ -10,7 +10,8 @@ const (
 	ACK       MessageType = 1
 	JOIN      MessageType = 2
 	CREATE    MessageType = 3
-	REPLICATE MessageType = 4
+	APPEND    MessageType = 4
+	REPLICATE MessageType = 5
 
 	// Piggybacked message types.
 	LEAVE MessageType = 16

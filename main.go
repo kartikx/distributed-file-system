@@ -95,14 +95,15 @@ func main() {
 		case demoArgs[0] == "meta_info":
 			fmt.Printf("ID: %s\n", NODE_ID)
 		case demoArgs[0] == "create":
-			err = CreateHDFSFile(demoArgs[1], []byte{})
+			err = CreateHDFSFile(demoArgs[1], demoArgs[2])
 			if err == nil {
 				fmt.Println("Creation completed")
 			} else {
 				fmt.Println("Error while creating file: ", err.Error())
 			}
 		case demoArgs[0] == "print_succ":
-			GetRingSuccessors(RING_POSITION)
+			ringSuccessors := GetRingSuccessors(RING_POSITION)
+			fmt.Print(ringSuccessors)
 		case demoArgs[0] == "print_ring":
 			PrintRing()
 		case demoArgs[0] == "store":

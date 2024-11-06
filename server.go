@@ -81,6 +81,8 @@ func startServer(clientServerChan chan int) {
 			err = ProcessReplicateMessage(message)
 		case CREATE:
 			err = ProcessCreateMessage(message)
+		case APPEND:
+			err = ProcessAppendMessage(message)
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
 		}
@@ -186,7 +188,7 @@ func ProcessReplicateMessage(message Message) error {
 		// This file was received over the network, ensure isPrimary is false for safety.
 		file.isPrimary = false
 
-		StoreFileLocally(&file)
+		// StoreFileLocally(&file)
 	}
 
 	return nil
@@ -204,6 +206,22 @@ func ProcessCreateMessage(message Message) error {
 		return err
 	}
 
-	CreateLocalFile(fileInfo.Name, fileInfo.Content)
+	CreateLocalFile(fileInfo.Name)
+	return nil
+}
+
+func ProcessAppendMessage(message Message) error {
+	PrintMessage("incoming", message, "")
+
+	encodedFileBlock := message.Data
+
+	var fileBlock FileBlock
+
+	err := json.Unmarshal([]byte(encodedFileBlock), &fileBlock)
+	if err != nil {
+		return err
+	}
+
+	AppendToLocalFile(fileBlock.Name, fileBlock.Content)
 	return nil
 }
