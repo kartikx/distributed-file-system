@@ -119,6 +119,34 @@ func PingMember(nodeId string) {
 }
 
 // Sends replication requests for all files to the given node.
+func SendAnyReplicationMessage(nodeId string, message Message, ch chan error) {
+
+	encodedMessage, err := json.Marshal(message)
+	if err != nil {
+		ch <- err
+		return
+	}
+
+	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	if err != nil {
+		ch <- err
+		return
+	}
+	defer connection.Close()
+
+	connection.Write(encodedMessage)
+	buffer := make([]byte, 8192)
+
+	_, err = connection.Read(buffer)
+	if err != nil {
+		ch <- err
+		return
+	}
+
+	ch <- nil
+}
+
+// Sends replication requests for all files to the given node.
 // This is used for both, replicate-on-create and replicate-on-fail
 func SendReplicationMessages(nodeId string, files []*FileInfo, ch chan error) {
 	fmt.Printf("Sending %d Replication messages to %s\n", len(files), nodeId)
@@ -161,9 +189,8 @@ func SendReplicationMessages(nodeId string, files []*FileInfo, ch chan error) {
 	ch <- nil
 }
 
-func SendFileCreationMessage(nodeId string, filename string, content []byte) error {
-	// TODO @kartikr2 Include file content inside.
-	fileInfo := FileInfo{filename, content, false}
+func MakeSendFileCreationMessage(nodeId string, filename string) error {
+	fileInfo := FileInfo{filename, 0, false}
 	encodedFileInfo, err := json.Marshal(fileInfo)
 
 	if err != nil {
@@ -171,6 +198,33 @@ func SendFileCreationMessage(nodeId string, filename string, content []byte) err
 	}
 
 	message := Message{Kind: CREATE, Data: string(encodedFileInfo)}
+
+	encodedMessage, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+
+	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+
+	connection.Write(encodedMessage)
+	buffer := make([]byte, 8192)
+
+	_, err = connection.Read(buffer)
+	if err != nil {
+		return err
+	}
+
+	// response := string(buffer[:mLen])
+	// fmt.Println("Replicated response: ", response)
+
+	return nil
+}
+
+func SendFileAppendMessage(nodeId string, message Message) error {
 
 	encodedMessage, err := json.Marshal(message)
 	if err != nil {
