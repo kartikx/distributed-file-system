@@ -115,7 +115,6 @@ func PingMember(nodeId string) {
 			log.Fatalf("Unexpected submessage kind in ACK")
 		}
 	}
-
 }
 
 // Sends replication requests for all files to the given node.
@@ -189,42 +188,7 @@ func SendReplicationMessages(nodeId string, files []*FileInfo, ch chan error) {
 	ch <- nil
 }
 
-func MakeSendFileCreationMessage(nodeId string, filename string) error {
-	fileInfo := FileInfo{filename, 0, false}
-	encodedFileInfo, err := json.Marshal(fileInfo)
-
-	if err != nil {
-		return err
-	}
-
-	message := Message{Kind: CREATE, Data: string(encodedFileInfo)}
-
-	encodedMessage, err := json.Marshal(message)
-	if err != nil {
-		return err
-	}
-
-	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
-	if err != nil {
-		return err
-	}
-	defer connection.Close()
-
-	connection.Write(encodedMessage)
-	buffer := make([]byte, 8192)
-
-	_, err = connection.Read(buffer)
-	if err != nil {
-		return err
-	}
-
-	// response := string(buffer[:mLen])
-	// fmt.Println("Replicated response: ", response)
-
-	return nil
-}
-
-func SendFileAppendMessage(nodeId string, message Message) error {
+func SendMessage(nodeId string, message Message) error {
 
 	encodedMessage, err := json.Marshal(message)
 	if err != nil {

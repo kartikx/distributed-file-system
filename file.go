@@ -67,6 +67,15 @@ func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 		return err
 	}
 
+	fileInfo := FileInfo{hdfsfilename, 0, false}
+	encodedFileInfo, err := json.Marshal(fileInfo)
+
+	if err != nil {
+		return err
+	}
+
+	createMessage := Message{Kind: CREATE, Data: string(encodedFileInfo)}
+
 	fileBlock := FileBlock{hdfsfilename, content, 0}
 	encodedFileBlock, err := json.Marshal(fileBlock)
 
@@ -74,22 +83,22 @@ func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 		return err
 	}
 
-	message := Message{Kind: APPEND, Data: string(encodedFileBlock)}
+	appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
 
 	if nodeId == NODE_ID {
-		create_err := CreateLocalFile(hdfsfilename)
+		create_err := ProcessCreateMessage(createMessage)
 		fmt.Printf("Created Local file\n")
 		if create_err == nil {
-			append_err := ProcessAppendMessage(message)
+			append_err := ProcessAppendMessage(appendMessage)
 			fmt.Printf("Appended Local file\n")
 			return append_err
 		}
 		return create_err
 
 	} else {
-		create_err := MakeSendFileCreationMessage(nodeId, hdfsfilename)
+		create_err := SendMessage(nodeId, createMessage)
 		if create_err == nil {
-			append_err := SendFileAppendMessage(nodeId, message)
+			append_err := SendMessage(nodeId, appendMessage)
 			return append_err
 		}
 		return create_err
@@ -124,7 +133,13 @@ func CreateLocalFile(filename string) error {
 
 	// If you are the primary replica for this file, make the successors create the file too
 	if GetPrimaryReplicaForFile(filename) == NODE_ID {
-		err = ReplicateFileCreation(filename)
+		replicateFileInfo := FileInfo{filename, 0, isPrimaryReplica}
+		encodedFileInfo, err := json.Marshal(replicateFileInfo)
+		if err != nil {
+			return err
+		}
+		createMessage := Message{Kind: CREATE, Data: string(encodedFileInfo)}
+		err = PerformReplication(createMessage)
 		if err != nil {
 			return err
 		}
@@ -160,7 +175,14 @@ func AppendToLocalFile(filename string, content []byte) error {
 
 	// If you are the primary replica for this file, make the successors process the appends too
 	if GetPrimaryReplicaForFile(filename) == NODE_ID {
-		err = ReplicateFileAppend(filename, content)
+
+		replicateFileBlock := FileBlock{filename, content, fileInfoMap[filename].NumBlocks}
+		encodedFileBlock, err := json.Marshal(replicateFileBlock)
+		if err != nil {
+			return err
+		}
+		appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
+		err = PerformReplication(appendMessage)
 		if err != nil {
 			return err
 		}
@@ -180,16 +202,14 @@ func GetPrimaryFiles() []*FileInfo {
 	return primaryFiles
 }
 
-// This is used for creating replica files
-func ReplicateFileCreation(filename string) error {
+// This is used for replicating - file creation and first block append
+func PerformReplication(message Message) error {
 	successors := GetRingSuccessors(RING_POSITION)
 
 	// One of the two successors could additionally be down. This might happen when the second failure
 	// hasn't been reflected in the membership list yet.
 	// If this happens, we just let replicate fail on one of the nodes.
 	// Eventually, the membership list will be updated, and the updated successor will get the replicas.
-
-	message := Message{Kind: CREATE, Data: filename}
 
 	ch := make(chan error, 2)
 	for _, succ := range successors {
@@ -198,38 +218,6 @@ func ReplicateFileCreation(filename string) error {
 
 	// Ensure one more replication.
 	err := <-ch
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// This is used for appending the first block to the replica files
-func ReplicateFileAppend(filename string, content []byte) error {
-	successors := GetRingSuccessors(RING_POSITION)
-
-	// One of the two successors could additionally be down. This might happen when the second failure
-	// hasn't been reflected in the membership list yet.
-	// If this happens, we just let replicate fail on one of the nodes.
-	// Eventually, the membership list will be updated, and the updated successor will get the replicas.
-
-	fileBlock := FileBlock{filename, content, fileInfoMap[filename].NumBlocks}
-	encodedFileBlock, err := json.Marshal(fileBlock)
-
-	if err != nil {
-		return err
-	}
-
-	message := Message{Kind: APPEND, Data: string(encodedFileBlock)}
-
-	ch := make(chan error, 2)
-	for _, succ := range successors {
-		go SendAnyReplicationMessage(succ, message, ch)
-	}
-
-	// Ensure one more replication.
-	err = <-ch
 	if err != nil {
 		return err
 	}
