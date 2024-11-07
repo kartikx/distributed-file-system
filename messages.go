@@ -11,7 +11,8 @@ const (
 	JOIN      MessageType = 2
 	CREATE    MessageType = 3
 	APPEND    MessageType = 4
-	REPLICATE MessageType = 5
+	CHECK     MessageType = 5
+	REPLICATE MessageType = 6
 
 	// Piggybacked message types.
 	LEAVE MessageType = 16

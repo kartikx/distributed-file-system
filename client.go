@@ -215,6 +215,38 @@ func SendMessage(nodeId string, message Message) error {
 	return nil
 }
 
+func SendMessageGetReply(nodeId string, message Message) (Message, error) {
+
+	// Make an object to store the reply message
+	var responseMessage Message
+
+	encodedMessage, err := json.Marshal(message)
+	if err != nil {
+		return responseMessage, err
+	}
+
+	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	if err != nil {
+		return responseMessage, err
+	}
+	defer connection.Close()
+
+	// Send the query message
+	connection.Write(encodedMessage)
+	buffer := make([]byte, 8192)
+
+	// Read the buffer to see if you have a response
+	mLen, err := connection.Read(buffer)
+	if err != nil {
+		return responseMessage, err
+	}
+
+	// Unmarshal the response message and return that
+	err = json.Unmarshal(buffer[:mLen], &responseMessage)
+
+	return responseMessage, err
+}
+
 func ExitGroup() {
 	fmt.Printf("Exiting gracefully %s\n", NODE_ID)
 
