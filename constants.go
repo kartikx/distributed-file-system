@@ -12,5 +12,5 @@ const (
 	PING_INTERVAL_MILLISECONDS     = 5000
 	RING_NUM_POINTS                = 1000
 	NUM_REPLICAS                   = 3
-	STORAGE_LOCATION               = "/home/kartikr2/mp3-out/"
+	STORAGE_LOCATION               = "/home/sdevata2/hdfs"
 )

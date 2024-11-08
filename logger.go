@@ -67,6 +67,9 @@ func PrintMessage(direction string, message Message, nodeId string) {
 	case APPEND:
 		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] APPEND message with %s\n", currentTime, direction, nodeId, message.Data)
 
+	case CHECK:
+		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] CHECK message with %s\n", currentTime, direction, nodeId, message.Data)
+
 	default:
 		fmt.Fprintf(log_file_writer, "[%s] [%s] ********Trying to print unknown message type**********", currentTime, direction)
 	}

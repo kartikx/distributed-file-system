@@ -83,6 +83,9 @@ func startServer(clientServerChan chan int) {
 			err = ProcessCreateMessage(message)
 		case APPEND:
 			err = ProcessAppendMessage(message)
+		case CHECK:
+			err = ProcessCheckMessage(message, server, address)
+			continue
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
 		}
@@ -220,5 +223,32 @@ func ProcessAppendMessage(message Message) error {
 	}
 
 	AppendToLocalFile(fileBlock.Name, fileBlock.Content)
+	return nil
+}
+
+func ProcessCheckMessage(message Message, server *net.UDPConn, address *net.UDPAddr) error {
+	PrintMessage("incoming", message, "")
+
+	filenameToCheck := message.Data
+
+	var checkFileInfo FileInfo
+
+	_, ok := fileInfoMap[filenameToCheck]
+	if ok {
+		checkFileInfo = *fileInfoMap[filenameToCheck]
+	}
+
+	encodedFileInfo, err := json.Marshal(checkFileInfo)
+	if err != nil {
+		return err
+	}
+	checkResponse := Message{Kind: CHECK, Data: string(encodedFileInfo)}
+	encodedcheckResponse, err := json.Marshal(checkResponse)
+	if err != nil {
+		return err
+	}
+
+	server.WriteToUDP(encodedcheckResponse, address)
+
 	return nil
 }

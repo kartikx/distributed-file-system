@@ -214,7 +214,31 @@ func PerformReplication(message Message) error {
 
 	ch := make(chan error, 2)
 	for _, succ := range successors {
-		go SendAnyReplicationMessage(succ, message, ch)
+
+		if message.Kind == CREATE {
+
+			var fileInfo FileInfo
+
+			err := json.Unmarshal([]byte(message.Data), &fileInfo)
+			if err != nil {
+				return err
+			}
+
+			checkMessage := Message{Kind: CHECK, Data: fileInfo.Name}
+
+			// Send a CHECK message and get the response CHECK message
+			responseMessage, err := SendMessageGetReply(succ, checkMessage)
+			if err == nil {
+				var responseFileInfo FileInfo
+				err := json.Unmarshal([]byte(responseMessage.Data), &responseFileInfo)
+				// If the file does not exist, response FileInfo has an empty filename
+				if err == nil && responseFileInfo.Name == "" {
+					go SendAnyReplicationMessage(succ, message, ch)
+				}
+			}
+		} else {
+			go SendAnyReplicationMessage(succ, message, ch)
+		}
 	}
 
 	// Ensure one more replication.
