@@ -235,6 +235,8 @@ func PerformReplication(message Message) error {
 					go SendAnyReplicationMessage(succ, message, ch)
 				}
 			}
+		} else {
+			go SendAnyReplicationMessage(succ, message, ch)
 		}
 	}
 
