@@ -239,8 +239,26 @@ func RequestFile(hdfsfilename string) error {
 			if err != nil {
 				return fmt.Errorf("unable to requeset file %s from %s", hdfsfilename, fileNodeId)
 			}
-			// TODO @sdevata2 wait in a loop till all blocks are received
-			time.Sleep(10 * time.Second)
+
+			// Wait till you get the file info
+			var newFileInfo FileInfo
+			for {
+				_, ok := fileInfoMap[hdfsfilename]
+				if ok {
+					newFileInfo = *fileInfoMap[hdfsfilename]
+					break
+				}
+			}
+
+			// Wait till you get all the blocks (maximum of 10 seconds)
+			// TODO @kartikr2 is there a better way to do this with time.After()?
+			waitStart := time.Now()
+			for {
+				if (responseFileInfo.NumBlocks <= newFileInfo.NumBlocks) || (time.Since(waitStart).Seconds() > 10) {
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
 		}
 	}
 
