@@ -70,8 +70,10 @@ func PrintMessage(direction string, message Message, nodeId string) {
 	case CHECK:
 		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] CHECK message with %s\n", currentTime, direction, nodeId, message.Data)
 
+	case FILES:
+		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] FILES message with %s\n", currentTime, direction, nodeId, message.Data)
 	default:
-		fmt.Fprintf(log_file_writer, "[%s] [%s] ********Trying to print unknown message type**********", currentTime, direction)
+		fmt.Fprintf(log_file_writer, "[%s] [%s] ********Trying to print unknown message type: %d**********", currentTime, direction, message.Kind)
 	}
 	fmt.Fprintf(log_file_writer, "---------\n")
 	log_file_writer.Flush()

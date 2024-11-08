@@ -85,12 +85,22 @@ func startServer(clientServerChan chan int) {
 			err = ProcessAppendMessage(message)
 		case CHECK:
 			err = ProcessCheckMessage(message, server, address)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
 			continue
 		case FILES:
 			err = ProcessFilesMessage(message, server, address)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
 			continue
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
+		}
+
+		if err != nil {
+			fmt.Println(err.Error())
 		}
 
 		ackResponse, err := EncodeAckMessage(messagesToPiggyback)
@@ -209,8 +219,7 @@ func ProcessCreateMessage(message Message) error {
 		return err
 	}
 
-	CreateLocalFile(fileInfo.Name)
-	return nil
+	return CreateLocalFile(fileInfo.Name)
 }
 
 func ProcessAppendMessage(message Message) error {
@@ -225,8 +234,7 @@ func ProcessAppendMessage(message Message) error {
 		return err
 	}
 
-	AppendToLocalFile(fileBlock.Name, fileBlock.Content)
-	return nil
+	return AppendToLocalFile(fileBlock.Name, fileBlock.Content)
 }
 
 func ProcessCheckMessage(message Message, server *net.UDPConn, address *net.UDPAddr) error {

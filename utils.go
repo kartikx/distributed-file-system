@@ -117,7 +117,7 @@ func DeleteMemberAndReReplicate(nodeID string) {
 	updatedPrimaryFiles := UpdatePrimaryReplicas()
 
 	// Invoke in a Go-routine because re-replication (with file checks could take a while)
-	go ReplicateFiles(updatedPrimaryFiles)
+	go ReplicateFilesWrapper(updatedPrimaryFiles)
 }
 
 // Removes common names from A
