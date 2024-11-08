@@ -85,9 +85,22 @@ func startServer(clientServerChan chan int) {
 			err = ProcessAppendMessage(message)
 		case CHECK:
 			err = ProcessCheckMessage(message, server, address)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+			continue
+		case FILES:
+			err = ProcessFilesMessage(message, server, address)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
 			continue
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
+		}
+
+		if err != nil {
+			fmt.Println(err.Error())
 		}
 
 		ackResponse, err := EncodeAckMessage(messagesToPiggyback)
@@ -158,9 +171,6 @@ func ProcessFailOrLeaveMessage(message Message) error {
 		os.Exit(0)
 	}
 
-	// TODO @kartikr2 Remove.
-	fmt.Printf("RECEIVED NODE %s as FAILED\n", nodeId)
-
 	_, ok := GetMemberInfo(nodeId)
 
 	if ok { // node exists in membership info, remove and disseminate
@@ -209,8 +219,7 @@ func ProcessCreateMessage(message Message) error {
 		return err
 	}
 
-	CreateLocalFile(fileInfo.Name)
-	return nil
+	return CreateLocalFile(fileInfo.Name)
 }
 
 func ProcessAppendMessage(message Message) error {
@@ -225,8 +234,7 @@ func ProcessAppendMessage(message Message) error {
 		return err
 	}
 
-	AppendToLocalFile(fileBlock.Name, fileBlock.Content)
-	return nil
+	return AppendToLocalFile(fileBlock.Name, fileBlock.Content)
 }
 
 func ProcessCheckMessage(message Message, server *net.UDPConn, address *net.UDPAddr) error {
@@ -252,6 +260,27 @@ func ProcessCheckMessage(message Message, server *net.UDPConn, address *net.UDPA
 	}
 
 	server.WriteToUDP(encodedcheckResponse, address)
+
+	return nil
+}
+
+func ProcessFilesMessage(message Message, server *net.UDPConn, address *net.UDPAddr) error {
+	PrintMessage("incoming", message, "")
+
+	filenames := GetFilesNamesOnNode()
+
+	encodedFilenames, err := json.Marshal(filenames)
+	if err != nil {
+		return err
+	}
+
+	filesResponse := Message{Kind: FILES, Data: string(encodedFilenames)}
+	encodedFilesResponse, err := json.Marshal(filesResponse)
+	if err != nil {
+		return err
+	}
+
+	server.WriteToUDP(encodedFilesResponse, address)
 
 	return nil
 }

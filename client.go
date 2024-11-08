@@ -119,7 +119,7 @@ func PingMember(nodeId string) {
 
 // Sends replication requests for all files to the given node.
 func SendAnyReplicationMessage(nodeId string, message Message, ch chan error) {
-
+	PrintMessage("outgoing", message, nodeId)
 	encodedMessage, err := json.Marshal(message)
 	if err != nil {
 		ch <- err
@@ -136,6 +136,8 @@ func SendAnyReplicationMessage(nodeId string, message Message, ch chan error) {
 	connection.Write(encodedMessage)
 	buffer := make([]byte, 8192)
 
+	// TODO kartikr2 Could potentially read the response to see if the recipient encountered an error.
+	// What would happen if the recipient failed on receipt? Would this timeout, or pause indefinitely?
 	_, err = connection.Read(buffer)
 	if err != nil {
 		ch <- err

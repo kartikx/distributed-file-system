@@ -101,6 +101,7 @@ func main() {
 			} else {
 				fmt.Println("Error while creating file: ", err.Error())
 			}
+		// TODO @kartikr2 Create an APPEND function.
 		case demoArgs[0] == "print_succ":
 			ringSuccessors := GetRingSuccessors(RING_POSITION)
 			fmt.Print(ringSuccessors)

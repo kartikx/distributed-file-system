@@ -6,6 +6,7 @@ import (
 
 const (
 	// Top level message types.
+	// TODO @kartikr2 Get rid of REPLICATE.
 	PING      MessageType = 0
 	ACK       MessageType = 1
 	JOIN      MessageType = 2
@@ -13,6 +14,7 @@ const (
 	APPEND    MessageType = 4
 	CHECK     MessageType = 5
 	REPLICATE MessageType = 6
+	FILES     MessageType = 7
 
 	// Piggybacked message types.
 	LEAVE MessageType = 16

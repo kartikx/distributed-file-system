@@ -111,10 +111,32 @@ func Shuffle(slice []string) {
 }
 
 func DeleteMemberAndReReplicate(nodeID string) {
+	fmt.Println("Re-replicating")
 	DeleteMember(nodeID)
 
 	updatedPrimaryFiles := UpdatePrimaryReplicas()
 
-	// ? Should we do this in a goroutine? This will wait for 2 replication to complete, what if it is too slow?
-	ReplicateFiles(updatedPrimaryFiles)
+	// Invoke in a Go-routine because re-replication (with file checks could take a while)
+	go ReplicateFilesWrapper(updatedPrimaryFiles)
+}
+
+// Removes common names from A
+func RemoveCommonElements(A, B []string) []string {
+	// Create a map to store elements from B for fast lookup
+	bMap := make(map[string]bool)
+	for _, item := range B {
+		bMap[item] = true
+	}
+
+	// Create a new slice to store unique elements from A
+	result := []string{}
+
+	// Iterate through A and only keep elements not in B
+	for _, item := range A {
+		if !bMap[item] {
+			result = append(result, item)
+		}
+	}
+
+	return result
 }
