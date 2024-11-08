@@ -15,6 +15,7 @@ const (
 	CHECK     MessageType = 5
 	REPLICATE MessageType = 6
 	FILES     MessageType = 7
+	GETFILE   MessageType = 8
 
 	// Piggybacked message types.
 	LEAVE MessageType = 16

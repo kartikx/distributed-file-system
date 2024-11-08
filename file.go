@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 var fileInfoMap = map[string]*FileInfo{}
@@ -22,6 +23,11 @@ type FileBlock struct {
 	Content []byte
 	// Shouldn't be exported, because different nodes will have different block IDs for the same file.
 	blockId int
+}
+
+type GetMessage struct {
+	Name      string
+	Requester string
 }
 
 // Checks whether this node has become the primary replica for any file.
@@ -200,14 +206,61 @@ func CreateLocalFile(filename string) error {
 	return err
 }
 
+func RequestFile(hdfsfilename string) error {
+
+	// Do a CHECK to find if the primary replica has the file
+	// TODO @sdevata2 perhaps from the other replicas too?
+	fileNodeId := GetPrimaryReplicaForFile(hdfsfilename)
+
+	checkMessage := Message{Kind: CHECK, Data: hdfsfilename}
+
+	// Send a CHECK message and get the response CHECK message
+	responseMessage, err := SendMessageGetReply(fileNodeId, checkMessage)
+	if err == nil {
+		var responseFileInfo FileInfo
+		err := json.Unmarshal([]byte(responseMessage.Data), &responseFileInfo)
+		// If the file does not exist, response FileInfo has an empty filename
+		if err != nil {
+			return err
+		}
+		if responseFileInfo.Name == "" {
+			return fmt.Errorf("primary replica does not have the HDFS file %s", hdfsfilename)
+		} else {
+			// Make a new struct to have info about who is requesting what
+			getMessageStruct := GetMessage{Name: hdfsfilename, Requester: NODE_ID}
+			encodedGetMessageStruct, err := json.Marshal(getMessageStruct)
+			if err != nil {
+				return err
+			}
+			// Construct a message to ask for a file
+			getFileMessage := Message{Kind: GETFILE, Data: string(encodedGetMessageStruct)}
+			// Send a GETFILE message
+			err = SendMessage(fileNodeId, getFileMessage)
+			if err != nil {
+				return fmt.Errorf("unable to requeset file %s from %s", hdfsfilename, fileNodeId)
+			}
+			// TODO @sdevata2 wait in a loop till all blocks are received
+			time.Sleep(10 * time.Second)
+		}
+	}
+
+	return nil
+}
+
 func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
 	fmt.Printf("Getting HDFS File %s to local file %s", hdfsfilename, localfilename)
 
 	_, ok := fileInfoMap[hdfsfilename]
 
 	if !ok {
-		// TODO @sdevata2 if the file does not exist on this node, get the file
-		return fmt.Errorf("trying to append to a file that does not exist")
+		// The file does not exist. Request for the file from the primary replica
+
+		err := RequestFile(hdfsfilename)
+		if err != nil {
+			// This node was unable to get the file for some reason
+			return err
+		}
+
 	}
 
 	// Create the local file

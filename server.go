@@ -95,6 +95,12 @@ func startServer(clientServerChan chan int) {
 				fmt.Println(err.Error())
 			}
 			continue
+		case GETFILE:
+			err = ProcessGetFileMessage(message, server, address)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+			continue
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
 		}
@@ -281,6 +287,65 @@ func ProcessFilesMessage(message Message, server *net.UDPConn, address *net.UDPA
 	}
 
 	server.WriteToUDP(encodedFilesResponse, address)
+
+	return nil
+}
+
+func ProcessGetFileMessage(message Message, server *net.UDPConn, address *net.UDPAddr) error {
+	PrintMessage("incoming", message, "")
+
+	encodedGetFileRequest := message.Data
+
+	var getFileStruct GetMessage
+	err := json.Unmarshal([]byte(encodedGetFileRequest), &getFileStruct)
+	if err != nil {
+		return err
+	}
+
+	var checkFileInfo FileInfo
+	// Check if you have the file that is being requested
+	_, ok := fileInfoMap[getFileStruct.Name]
+	if ok {
+		checkFileInfo = *fileInfoMap[getFileStruct.Name]
+	}
+
+	encodedFileInfo, err := json.Marshal(checkFileInfo)
+	if err != nil {
+		return err
+	}
+	checkResponse := Message{Kind: CHECK, Data: string(encodedFileInfo)}
+	encodedcheckResponse, err := json.Marshal(checkResponse)
+	if err != nil {
+		return err
+	}
+	// Write the file info of the requested file so that the port doesn't time out
+	// You will asynchronously push the file right affter
+	server.WriteToUDP(encodedcheckResponse, address)
+
+	// Send the file CREATE message
+	encodedFileInfo, err = json.Marshal(fileInfoMap[getFileStruct.Name])
+	if err != nil {
+		return err
+	}
+	createMessage := Message{Kind: CREATE, Data: string(encodedFileInfo)}
+	err = SendMessage(getFileStruct.Requester, createMessage)
+	if err != nil {
+		return err
+	}
+
+	// Send all the file blocks as APPEND messages
+	for _, eachhdfsfileblock := range fileBlockMap[getFileStruct.Name] {
+		// _, err = f.Write(eachhdfsfileblock.Content)
+		encodedFileBlock, err := json.Marshal(eachhdfsfileblock)
+		if err != nil {
+			return err
+		}
+		appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
+		err = SendMessage(getFileStruct.Requester, appendMessage)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
