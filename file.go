@@ -200,6 +200,34 @@ func CreateLocalFile(filename string) error {
 	return err
 }
 
+func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
+	fmt.Printf("Getting HDFS File %s to local file %s", hdfsfilename, localfilename)
+
+	_, ok := fileInfoMap[hdfsfilename]
+
+	if !ok {
+		// TODO @sdevata2 if the file does not exist on this node, get the file
+		return fmt.Errorf("trying to append to a file that does not exist")
+	}
+
+	// Create the local file
+	f, err := os.Create(localfilename)
+	if err != nil {
+		return fmt.Errorf("unable to create the localfilename")
+	}
+	defer f.Close()
+
+	// For each fileblock, write it to the localfile
+	for _, eachhdfsfileblock := range fileBlockMap[hdfsfilename] {
+		_, err = f.Write(eachhdfsfileblock.Content)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func AppendToLocalFile(filename string, content []byte) error {
 	fmt.Println("Appending to file: ", filename)
 
