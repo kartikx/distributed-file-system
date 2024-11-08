@@ -256,63 +256,99 @@ func ReplicateFiles(files []*FileInfo) error {
 
 	successors := GetRingSuccessors(RING_POSITION)
 
-	// TODO Ask successor for what files and blocks it has.
+	filenames := make([]string, 0, len(files))
+	for _, file := range files {
+		filenames = append(filenames, file.Name)
+	}
 
-	// TODO Diff files
-
-	// One of the two successors could additionally be down. This might happen when the second failure
-	// hasn't been reflected in the membership list yet.
-	// If this happens, we just let replicate fail on one of the nodes.
-	// Eventually, the membership list will be updated, and the updated successor will get the replicas.
-
-	for _, fileToReplicate := range files {
-		fmt.Println("CREATE replicate for ", fileToReplicate.Name)
-		encodedFileInfo, err := json.Marshal(fileToReplicate)
+	for _, succ := range successors {
+		// Get all files from succ
+		succ_files, err := GetFileNamesFromNode(succ)
 		if err != nil {
 			return err
 		}
-		createMessage := Message{Kind: CREATE, Data: string(encodedFileInfo)}
 
-		ch := make(chan error, 2)
-		for _, succ := range successors {
+		fmt.Printf("Succ (%s, %d) returned files: [%s]\n", succ, GetRingPosition(succ), succ_files)
+
+		filesToReplicate := RemoveCommonElements(filenames, succ_files)
+
+		fmt.Printf("Files to replicate %d [%s]\n", len(filesToReplicate), filesToReplicate)
+
+		// One of the two successors could additionally be down. This might happen when the second failure
+		// hasn't been reflected in the membership list yet.
+		// If this happens, we just let replicate fail on one of the nodes.
+		// Eventually, the membership list will be updated, and the updated successor will get the replicas.
+
+		for _, fileToReplicate := range filesToReplicate {
+			fmt.Println("CREATE replicate for ", fileToReplicate)
+			encodedFileInfo, err := json.Marshal(fileToReplicate)
+			if err != nil {
+				return err
+			}
+			createMessage := Message{Kind: CREATE, Data: string(encodedFileInfo)}
+
+			ch := make(chan error)
+			// TODO Are we even using the channel functionality anymore.
 			go SendAnyReplicationMessage(succ, createMessage, ch)
-		}
 
-		// TODO @kartikr2 Retest with concurrent failures.
-		// Print the return value in the caller of this function.
-		err = <-ch
-		if err != nil {
-			return err
-		}
-
-		err = <-ch
-		if err != nil {
-			return err
-		}
-
-		// TODO @kartikr2 Can UDP mess up packet ordering?
-
-		for _, fileBlockToReplicate := range fileBlockMap[fileToReplicate.Name] {
-			fmt.Println("APPEND replicate for ", fileToReplicate.Name, fileBlockToReplicate.blockId)
-
-			// TODO @sdevata2 Is passing 0 correct?
-			replicateFileBlock := FileBlock{fileToReplicate.Name, fileBlockToReplicate.Content, 0}
-			encodedFileBlock, err := json.Marshal(replicateFileBlock)
+			// TODO @kartikr2 Retest with concurrent failures.
+			err = <-ch
 			if err != nil {
 				return err
 			}
 
-			appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
+			// TODO @kartikr2 Can UDP mess up packet ordering?
 
-			for _, succ := range successors {
+			for _, fileBlockToReplicate := range fileBlockMap[fileToReplicate] {
+				fmt.Println("APPEND replicate for ", fileToReplicate, fileBlockToReplicate.blockId)
+
+				// TODO @sdevata2 Is passing 0 correct?
+				replicateFileBlock := FileBlock{fileToReplicate, fileBlockToReplicate.Content, 0}
+				encodedFileBlock, err := json.Marshal(replicateFileBlock)
+				if err != nil {
+					return err
+				}
+
+				appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
+
+				// TODO What if this node fails right after sending this? The next node should become the leader.
 				go SendAnyReplicationMessage(succ, appendMessage, ch)
-			}
 
-			_, _ = <-ch, <-ch
+				<-ch
+			}
 		}
 	}
 
 	// Ensure two replications.
 
 	return nil
+}
+
+func GetFileNamesFromNode(node string) ([]string, error) {
+	filesMessage := Message{Kind: FILES, Data: ""}
+
+	// Send a CHECK message and get the response CHECK message
+	responseMessage, err := SendMessageGetReply(node, filesMessage)
+
+	if err == nil {
+		var responseFiles []string
+		err := json.Unmarshal([]byte(responseMessage.Data), &responseFiles)
+		if err != nil {
+			return []string{}, err
+		}
+		return responseFiles, err
+	}
+
+	return []string{}, nil
+}
+
+func GetFilesNamesOnNode() []string {
+	filenames := make([]string, 0, len(fileInfoMap))
+
+	for filename, _ := range fileInfoMap {
+		filenames = append(filenames, filename)
+	}
+
+	fmt.Println("Files on Node: ", len(filenames))
+	return filenames
 }

@@ -86,6 +86,9 @@ func startServer(clientServerChan chan int) {
 		case CHECK:
 			err = ProcessCheckMessage(message, server, address)
 			continue
+		case FILES:
+			err = ProcessFilesMessage(message, server, address)
+			continue
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
 		}
@@ -249,6 +252,27 @@ func ProcessCheckMessage(message Message, server *net.UDPConn, address *net.UDPA
 	}
 
 	server.WriteToUDP(encodedcheckResponse, address)
+
+	return nil
+}
+
+func ProcessFilesMessage(message Message, server *net.UDPConn, address *net.UDPAddr) error {
+	PrintMessage("incoming", message, "")
+
+	filenames := GetFilesNamesOnNode()
+
+	encodedFilenames, err := json.Marshal(filenames)
+	if err != nil {
+		return err
+	}
+
+	filesResponse := Message{Kind: FILES, Data: string(encodedFilenames)}
+	encodedFilesResponse, err := json.Marshal(filesResponse)
+	if err != nil {
+		return err
+	}
+
+	server.WriteToUDP(encodedFilesResponse, address)
 
 	return nil
 }
