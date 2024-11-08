@@ -109,6 +109,8 @@ func main() {
 			PrintRing()
 		case demoArgs[0] == "store":
 			PrintStoredFiles()
+		case demoArgs[0] == "append":
+			AppendToHDFSFile(demoArgs[1], demoArgs[2])
 		}
 	}
 }

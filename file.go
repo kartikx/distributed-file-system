@@ -105,6 +105,56 @@ func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 	}
 }
 
+// Load the localfile and append it to an existing file on HyDFS
+func AppendToHDFSFile(localfilename string, hdfsfilename string) error {
+	nodeId := GetPrimaryReplicaForFile(hdfsfilename)
+
+	fmt.Println("File hash: ", GetRingPosition(hdfsfilename))
+
+	// Check if the file even exists on HyDFS
+	checkMessage := Message{Kind: CHECK, Data: hdfsfilename}
+
+	// Send a CHECK message and get the response CHECK message
+	responseMessage, err := SendMessageGetReply(nodeId, checkMessage)
+	if err == nil {
+		var responseFileInfo FileInfo
+		err := json.Unmarshal([]byte(responseMessage.Data), &responseFileInfo)
+		// If the file does not exist, response FileInfo has an empty filename
+		if err == nil && responseFileInfo.Name == "" {
+			fmt.Printf("File %s does not exist on HyDFS, not appending %s", hdfsfilename, localfilename)
+			return fmt.Errorf("tried to append localfile to a file that does not exist on HyDFS")
+		}
+	}
+
+	// Read the contents of the localfile
+	content, err := os.ReadFile(localfilename)
+	if err != nil {
+		return err
+	}
+
+	// Make a new fileblock with the content of the localfile
+	fileBlock := FileBlock{hdfsfilename, content, 0}
+	encodedFileBlock, err := json.Marshal(fileBlock)
+
+	if err != nil {
+		return err
+	}
+
+	// This fileblock will be appended to the HyDFS file
+	appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
+
+	if nodeId == NODE_ID {
+		append_err := ProcessAppendMessage(appendMessage)
+		fmt.Printf("Appended Local file\n")
+		return append_err
+
+	} else {
+		append_err := SendMessage(nodeId, appendMessage)
+		fmt.Printf("Sent a message to %s append a localfile\n", nodeId)
+		return append_err
+	}
+}
+
 // Creates file on local disk and triggers replication.
 func CreateLocalFile(filename string) error {
 	fmt.Printf("Creating file with name: %s \n", filename)
@@ -139,7 +189,9 @@ func CreateLocalFile(filename string) error {
 			return err
 		}
 		createMessage := Message{Kind: CREATE, Data: string(encodedFileInfo)}
-		err = PerformReplication(createMessage)
+		// Wait for both replicas to create the file
+		// Otherwise this might result in a case where a replica gets an APPEND before a CREATE
+		err = PerformReplication(createMessage, true)
 		if err != nil {
 			return err
 		}
@@ -173,7 +225,9 @@ func AppendToLocalFile(filename string, content []byte) error {
 		return err
 	}
 
+	fmt.Printf("%d blocks for file %s\n", fileInfoMap[filename].NumBlocks, filename)
 	fileInfoMap[filename].NumBlocks += 1
+	fmt.Printf("Incremented: %d blocks for file %s\n", fileInfoMap[filename].NumBlocks, filename)
 
 	// If you are the primary replica for this file, make the successors process the appends too
 	if GetPrimaryReplicaForFile(filename) == NODE_ID {
@@ -183,7 +237,7 @@ func AppendToLocalFile(filename string, content []byte) error {
 			return err
 		}
 		appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
-		err = PerformReplication(appendMessage)
+		err = PerformReplication(appendMessage, false)
 		if err != nil {
 			return err
 		}
@@ -204,7 +258,7 @@ func GetPrimaryFiles() []*FileInfo {
 }
 
 // This is used for replicating - file creation and first block append
-func PerformReplication(message Message) error {
+func PerformReplication(message Message, waitBoth bool) error {
 	successors := GetRingSuccessors(RING_POSITION)
 
 	// One of the two successors could additionally be down. This might happen when the second failure
@@ -232,6 +286,8 @@ func PerformReplication(message Message) error {
 				// If the file does not exist, response FileInfo has an empty filename
 				if err == nil && responseFileInfo.Name == "" {
 					go SendAnyReplicationMessage(succ, message, ch)
+				} else if responseFileInfo.Name != "" {
+					ch <- fmt.Errorf("trying to create a file that already exists on HyDFS")
 				}
 			}
 		} else {
@@ -243,6 +299,14 @@ func PerformReplication(message Message) error {
 	err := <-ch
 	if err != nil {
 		return err
+	}
+
+	// In some cases, you would want to wait for both replicas to respond
+	if waitBoth {
+		err := <-ch
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
