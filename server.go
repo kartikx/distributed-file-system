@@ -155,9 +155,6 @@ func ProcessFailOrLeaveMessage(message Message) error {
 		os.Exit(0)
 	}
 
-	// TODO @kartikr2 Remove.
-	fmt.Printf("RECEIVED NODE %s as FAILED\n", nodeId)
-
 	_, ok := GetMemberInfo(nodeId)
 
 	if ok { // node exists in membership info, remove and disseminate

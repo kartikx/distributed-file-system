@@ -12,6 +12,7 @@ const (
 	CREATE    MessageType = 3
 	APPEND    MessageType = 4
 	REPLICATE MessageType = 5
+	// TODO @kartikr2 Get rid of REPLICATE.
 
 	// Piggybacked message types.
 	LEAVE MessageType = 16

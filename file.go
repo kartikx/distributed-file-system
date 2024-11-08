@@ -149,6 +149,7 @@ func CreateLocalFile(filename string) error {
 }
 
 func AppendToLocalFile(filename string, content []byte) error {
+	fmt.Println("Appending to file: ", filename)
 
 	_, ok := fileInfoMap[filename]
 
@@ -166,6 +167,7 @@ func AppendToLocalFile(filename string, content []byte) error {
 		return fmt.Errorf("unable to create the block of file")
 	}
 	defer f.Close()
+
 	_, err = f.Write(content)
 	if err != nil {
 		return err
@@ -175,7 +177,6 @@ func AppendToLocalFile(filename string, content []byte) error {
 
 	// If you are the primary replica for this file, make the successors process the appends too
 	if GetPrimaryReplicaForFile(filename) == NODE_ID {
-
 		replicateFileBlock := FileBlock{filename, content, fileInfoMap[filename].NumBlocks}
 		encodedFileBlock, err := json.Marshal(replicateFileBlock)
 		if err != nil {
@@ -227,28 +228,67 @@ func PerformReplication(message Message) error {
 
 // This is used for both, replicate-on-create and replicate-on-fail
 func ReplicateFiles(files []*FileInfo) error {
+	fmt.Println("Replicating files, Count: ", len(files))
+
 	successors := GetRingSuccessors(RING_POSITION)
+
+	// TODO Ask successor for what files and blocks it has.
+
+	// TODO Diff files
 
 	// One of the two successors could additionally be down. This might happen when the second failure
 	// hasn't been reflected in the membership list yet.
 	// If this happens, we just let replicate fail on one of the nodes.
 	// Eventually, the membership list will be updated, and the updated successor will get the replicas.
 
-	ch := make(chan error, 2)
-	for _, succ := range successors {
-		go SendReplicationMessages(succ, files, ch)
+	for _, fileToReplicate := range files {
+		fmt.Println("CREATE replicate for ", fileToReplicate.Name)
+		encodedFileInfo, err := json.Marshal(fileToReplicate)
+		if err != nil {
+			return err
+		}
+		createMessage := Message{Kind: CREATE, Data: string(encodedFileInfo)}
+
+		ch := make(chan error, 2)
+		for _, succ := range successors {
+			go SendAnyReplicationMessage(succ, createMessage, ch)
+		}
+
+		// TODO @kartikr2 Retest with concurrent failures.
+		// Print the return value in the caller of this function.
+		err = <-ch
+		if err != nil {
+			return err
+		}
+
+		err = <-ch
+		if err != nil {
+			return err
+		}
+
+		// TODO @kartikr2 Can UDP mess up packet ordering?
+
+		for _, fileBlockToReplicate := range fileBlockMap[fileToReplicate.Name] {
+			fmt.Println("APPEND replicate for ", fileToReplicate.Name, fileBlockToReplicate.blockId)
+
+			// TODO @sdevata2 Is passing 0 correct?
+			replicateFileBlock := FileBlock{fileToReplicate.Name, fileBlockToReplicate.Content, 0}
+			encodedFileBlock, err := json.Marshal(replicateFileBlock)
+			if err != nil {
+				return err
+			}
+
+			appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
+
+			for _, succ := range successors {
+				go SendAnyReplicationMessage(succ, appendMessage, ch)
+			}
+
+			_, _ = <-ch, <-ch
+		}
 	}
 
 	// Ensure two replications.
-	err := <-ch
-	if err != nil {
-		return err
-	}
-
-	err = <-ch
-	if err != nil {
-		return err
-	}
 
 	return nil
 }

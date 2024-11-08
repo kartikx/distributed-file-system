@@ -115,6 +115,9 @@ func DeleteMemberAndReReplicate(nodeID string) {
 
 	updatedPrimaryFiles := UpdatePrimaryReplicas()
 
-	// ? Should we do this in a goroutine? This will wait for 2 replication to complete, what if it is too slow?
-	ReplicateFiles(updatedPrimaryFiles)
+	err := ReplicateFiles(updatedPrimaryFiles)
+
+	if err != nil {
+		fmt.Println("Error: ", err.Error())
+	}
 }
