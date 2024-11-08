@@ -324,9 +324,7 @@ func AppendToLocalFile(filename string, content []byte) error {
 		return err
 	}
 
-	fmt.Printf("%d blocks for file %s\n", fileInfoMap[filename].NumBlocks, filename)
 	fileInfoMap[filename].NumBlocks += 1
-	fmt.Printf("Incremented: %d blocks for file %s\n", fileInfoMap[filename].NumBlocks, filename)
 
 	// If you are the primary replica for this file, make the successors process the appends too
 	if GetPrimaryReplicaForFile(filename) == NODE_ID {
