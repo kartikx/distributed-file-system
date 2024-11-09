@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 var fileInfoMap = map[string]*FileInfo{}
 var fileBlockMap = map[string][]*FileBlock{}
+
+var tempFileInfoMap = map[string]*FileInfo{}
+var tempFileBlockMap = map[string][]*FileBlock{}
 
 type FileInfo struct {
 	Name      string
@@ -22,6 +26,11 @@ type FileBlock struct {
 	Content []byte
 	// Shouldn't be exported, because different nodes will have different block IDs for the same file.
 	blockId int
+}
+
+type GetMessage struct {
+	Name      string
+	Requester string
 }
 
 // Checks whether this node has become the primary replica for any file.
@@ -86,10 +95,10 @@ func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 	appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
 
 	if nodeId == NODE_ID {
-		create_err := ProcessCreateMessage(createMessage)
+		create_err := ProcessCreateMessage(createMessage, false)
 		fmt.Printf("Created Local file\n")
 		if create_err == nil {
-			append_err := ProcessAppendMessage(appendMessage)
+			append_err := ProcessAppendMessage(appendMessage, false)
 			fmt.Printf("Appended Local file\n")
 			return append_err
 		}
@@ -144,7 +153,7 @@ func AppendToHDFSFile(localfilename string, hdfsfilename string) error {
 	appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
 
 	if nodeId == NODE_ID {
-		append_err := ProcessAppendMessage(appendMessage)
+		append_err := ProcessAppendMessage(appendMessage, false)
 		fmt.Printf("Appended Local file\n")
 		return append_err
 
@@ -156,7 +165,7 @@ func AppendToHDFSFile(localfilename string, hdfsfilename string) error {
 }
 
 // Creates file on local disk and triggers replication.
-func CreateLocalFile(filename string) error {
+func CreateLocalFile(filename string, isTemp bool) error {
 	fmt.Printf("Creating file with name: %s \n", filename)
 
 	isPrimaryReplica := false
@@ -166,16 +175,26 @@ func CreateLocalFile(filename string) error {
 
 	fileInfo := &FileInfo{filename, 0, isPrimaryReplica}
 
-	_, ok := fileInfoMap[fileInfo.Name]
+	var fileInfoMapToUse map[string]*FileInfo
+	if isTemp {
+		fileInfoMapToUse = tempFileInfoMap
+	} else {
+		fileInfoMapToUse = fileInfoMap
+	}
+
+	_, ok := fileInfoMapToUse[fileInfo.Name]
 
 	if !ok {
-		fileInfoMap[fileInfo.Name] = fileInfo
+		fileInfoMapToUse[fileInfo.Name] = fileInfo
 	} else {
 		// TODO @kartikr2 Throw error if file already exists. Should be propagated across the network.
 		return fmt.Errorf("file already exists on the HDFS")
 	}
 
 	dirName := STORAGE_LOCATION + filename
+	if isTemp {
+		dirName += "_temp"
+	}
 	err := os.MkdirAll(dirName, 0777)
 	if err != nil {
 		return err
@@ -200,14 +219,86 @@ func CreateLocalFile(filename string) error {
 	return err
 }
 
+func RequestFile(hdfsfilename string) error {
+
+	// Do a CHECK to find if the primary replica has the file
+	// TODO @sdevata2 perhaps from the other replicas too?
+	fileNodeId := GetPrimaryReplicaForFile(hdfsfilename)
+
+	checkMessage := Message{Kind: CHECK, Data: hdfsfilename}
+
+	// Send a CHECK message and get the response CHECK message
+	responseMessage, err := SendMessageGetReply(fileNodeId, checkMessage)
+	if err != nil {
+		return err
+	}
+
+	var responseFileInfo FileInfo
+	err = json.Unmarshal([]byte(responseMessage.Data), &responseFileInfo)
+
+	// If the file does not exist, response FileInfo has an empty filename
+	if err != nil {
+		return err
+	}
+
+	if responseFileInfo.Name == "" {
+		return fmt.Errorf("primary replica does not have the HDFS file %s", hdfsfilename)
+	} else {
+		// Make a new struct to have info about who is requesting what
+		getMessageStruct := GetMessage{Name: hdfsfilename, Requester: NODE_ID}
+		encodedGetMessageStruct, err := json.Marshal(getMessageStruct)
+		if err != nil {
+			return err
+		}
+		// Construct a message to ask for a file
+		getFileMessage := Message{Kind: GETFILE, Data: string(encodedGetMessageStruct)}
+		// Send a GETFILE message
+		err = SendMessage(fileNodeId, getFileMessage)
+		if err != nil {
+			return fmt.Errorf("unable to requeset file %s from %s", hdfsfilename, fileNodeId)
+		}
+
+		// Wait till you get the file info
+		// TODO @kartikr2 This could throw a race condition.
+		var newFileInfo *FileInfo
+		for {
+			_, ok := tempFileInfoMap[hdfsfilename]
+			if ok {
+				newFileInfo = tempFileInfoMap[hdfsfilename]
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+
+		// Wait till you get all the blocks (maximum of 10 seconds)
+		waitStart := time.Now()
+		for {
+			if (responseFileInfo.NumBlocks <= newFileInfo.NumBlocks) || (time.Since(waitStart).Seconds() > 10) {
+				break
+			}
+
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	return nil
+}
+
 func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
 	fmt.Printf("Getting HDFS File %s to local file %s", hdfsfilename, localfilename)
 
-	_, ok := fileInfoMap[hdfsfilename]
+	var fileBlockMapToUse map[string][]*FileBlock
 
-	if !ok {
-		// TODO @sdevata2 if the file does not exist on this node, get the file
-		return fmt.Errorf("trying to append to a file that does not exist")
+	if GetPrimaryReplicaForFile(hdfsfilename) != NODE_ID {
+		// Get the file from the primary replica, since it would be the most recent
+		err := RequestFile(hdfsfilename)
+		if err != nil {
+			// This node was unable to get the file for some reason
+			return err
+		}
+		fileBlockMapToUse = tempFileBlockMap
+	} else {
+		fileBlockMapToUse = fileBlockMap
 	}
 
 	// Create the local file
@@ -218,29 +309,49 @@ func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
 	defer f.Close()
 
 	// For each fileblock, write it to the localfile
-	for _, eachhdfsfileblock := range fileBlockMap[hdfsfilename] {
+	for _, eachhdfsfileblock := range fileBlockMapToUse[hdfsfilename] {
 		_, err = f.Write(eachhdfsfileblock.Content)
 		if err != nil {
 			return err
 		}
 	}
 
+	// Done with this file. Delete it so that the next GET would request for it again
+	delete(tempFileInfoMap, hdfsfilename)
+	delete(tempFileBlockMap, hdfsfilename)
+
 	return nil
 }
 
-func AppendToLocalFile(filename string, content []byte) error {
+func AppendToLocalFile(filename string, content []byte, isTemp bool) error {
 	fmt.Println("Appending to file: ", filename)
 
-	_, ok := fileInfoMap[filename]
+	var fileInfoMapToUse map[string]*FileInfo
+	var fileBlockMapToUse map[string][]*FileBlock
+	if isTemp {
+		fileInfoMapToUse = tempFileInfoMap
+		fileBlockMapToUse = tempFileBlockMap
+	} else {
+		fileInfoMapToUse = fileInfoMap
+		fileBlockMapToUse = fileBlockMap
+	}
+
+	_, ok := fileInfoMapToUse[filename]
 
 	if !ok {
 		return fmt.Errorf("trying to append to a file that does not exist")
 	}
 
-	fileBlock := &FileBlock{filename, content, fileInfoMap[filename].NumBlocks}
-	fileBlockMap[filename] = append(fileBlockMap[filename], fileBlock)
+	fileBlock := &FileBlock{filename, content, fileInfoMapToUse[filename].NumBlocks}
+	fileBlockMapToUse[filename] = append(fileBlockMapToUse[filename], fileBlock)
 
-	appendFileName := STORAGE_LOCATION + filename + "/" + filename + "_block" + strconv.Itoa(fileInfoMap[filename].NumBlocks)
+	appendFileName := ""
+	if isTemp {
+		appendFileName = STORAGE_LOCATION + filename + "_temp" + "/" + filename + "_block" + strconv.Itoa(fileInfoMapToUse[filename].NumBlocks) + "_temp"
+
+	} else {
+		appendFileName = STORAGE_LOCATION + filename + "/" + filename + "_block" + strconv.Itoa(fileInfoMapToUse[filename].NumBlocks)
+	}
 
 	f, err := os.Create(appendFileName)
 	if err != nil {
@@ -253,13 +364,11 @@ func AppendToLocalFile(filename string, content []byte) error {
 		return err
 	}
 
-	fmt.Printf("%d blocks for file %s\n", fileInfoMap[filename].NumBlocks, filename)
-	fileInfoMap[filename].NumBlocks += 1
-	fmt.Printf("Incremented: %d blocks for file %s\n", fileInfoMap[filename].NumBlocks, filename)
+	fileInfoMapToUse[filename].NumBlocks += 1
 
 	// If you are the primary replica for this file, make the successors process the appends too
 	if GetPrimaryReplicaForFile(filename) == NODE_ID {
-		replicateFileBlock := FileBlock{filename, content, fileInfoMap[filename].NumBlocks}
+		replicateFileBlock := FileBlock{filename, content, fileInfoMapToUse[filename].NumBlocks}
 		encodedFileBlock, err := json.Marshal(replicateFileBlock)
 		if err != nil {
 			return err
@@ -398,7 +507,6 @@ func ReplicateFiles(files []*FileInfo) error {
 				return err
 			}
 
-			// TODO @kartikr2 Can UDP mess up packet ordering?
 			for _, fileBlockToReplicate := range fileBlockMap[fileToReplicate] {
 				fmt.Println("APPEND replicate for ", fileToReplicate, fileBlockToReplicate.blockId)
 				LogMessage(fmt.Sprintf("APPEND replicate for [%s,%d] at [%s, %d]", fileToReplicate,

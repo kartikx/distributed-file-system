@@ -65,7 +65,6 @@ func PingMember(nodeId string) {
 
 	buffer := make([]byte, 8192)
 
-	// TODO would this work would even if I were to re-use the connection?
 	connection.SetReadDeadline(time.Now().Add(TIMEOUT_DETECTION_MILLISECONDS * time.Millisecond))
 	mLen, err := connection.Read(buffer)
 

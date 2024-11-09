@@ -84,22 +84,32 @@ func startServer(clientServerChan chan int) {
 			// TODO If there is an error we can indicate this to the client appropriately.
 			err = ProcessReplicateMessage(message)
 		case CREATE:
-			err = ProcessCreateMessage(message)
+			err = ProcessCreateMessage(message, false)
+		case TEMP_CREATE:
+			err = ProcessCreateMessage(message, true)
 		case APPEND:
-			err = ProcessAppendMessage(message)
+			err = ProcessAppendMessage(message, false)
+		case TEMP_APPEND:
+			err = ProcessAppendMessage(message, true)
 		case CHECK:
-			err = ProcessCheckMessage(message, conn)
+			err = ProcessCheckMessage(message, conn, remoteAddress)
 			if err != nil {
 				fmt.Println(err.Error())
 			}
 			conn.Close()
 			continue
 		case FILES:
-			err = ProcessFilesMessage(message, conn)
+			err = ProcessFilesMessage(message, conn, remoteAddress)
 			if err != nil {
 				fmt.Println(err.Error())
 			}
 			conn.Close()
+			continue
+		case GETFILE:
+			err = ProcessGetFileMessage(message, conn, remoteAddress)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
 			continue
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
@@ -214,7 +224,7 @@ func ProcessReplicateMessage(message Message) error {
 	return nil
 }
 
-func ProcessCreateMessage(message Message) error {
+func ProcessCreateMessage(message Message, isTemp bool) error {
 	PrintMessage("incoming", message, "")
 
 	encodedFileInfo := message.Data
@@ -226,10 +236,10 @@ func ProcessCreateMessage(message Message) error {
 		return err
 	}
 
-	return CreateLocalFile(fileInfo.Name)
+	return CreateLocalFile(fileInfo.Name, isTemp)
 }
 
-func ProcessAppendMessage(message Message) error {
+func ProcessAppendMessage(message Message, isTemp bool) error {
 	PrintMessage("incoming", message, "")
 
 	encodedFileBlock := message.Data
@@ -241,11 +251,11 @@ func ProcessAppendMessage(message Message) error {
 		return err
 	}
 
-	return AppendToLocalFile(fileBlock.Name, fileBlock.Content)
+	return AppendToLocalFile(fileBlock.Name, fileBlock.Content, isTemp)
 }
 
-func ProcessCheckMessage(message Message, conn net.Conn) error {
-	PrintMessage("incoming", message, "")
+func ProcessCheckMessage(message Message, conn net.Conn, remoteAddress string) error {
+	PrintMessage("incoming", message, remoteAddress)
 
 	filenameToCheck := message.Data
 
@@ -272,8 +282,8 @@ func ProcessCheckMessage(message Message, conn net.Conn) error {
 	return nil
 }
 
-func ProcessFilesMessage(message Message, conn net.Conn) error {
-	PrintMessage("incoming", message, "")
+func ProcessFilesMessage(message Message, conn net.Conn, remoteAddress string) error {
+	PrintMessage("incoming", message, remoteAddress)
 
 	filenames := GetFilesNamesOnNode()
 
@@ -290,6 +300,65 @@ func ProcessFilesMessage(message Message, conn net.Conn) error {
 
 	conn.Write(encodedFilesResponse)
 	conn.Close()
+
+	return nil
+}
+
+func ProcessGetFileMessage(message Message, conn net.Conn, remoteAddress string) error {
+	PrintMessage("incoming", message, remoteAddress)
+
+	encodedGetFileRequest := message.Data
+
+	var getFileStruct GetMessage
+	err := json.Unmarshal([]byte(encodedGetFileRequest), &getFileStruct)
+	if err != nil {
+		return err
+	}
+
+	var checkFileInfo FileInfo
+	// Check if you have the file that is being requested
+	_, ok := fileInfoMap[getFileStruct.Name]
+	if ok {
+		checkFileInfo = *fileInfoMap[getFileStruct.Name]
+	}
+
+	encodedFileInfo, err := json.Marshal(checkFileInfo)
+	if err != nil {
+		return err
+	}
+	checkResponse := Message{Kind: CHECK, Data: string(encodedFileInfo)}
+	encodedcheckResponse, err := json.Marshal(checkResponse)
+	if err != nil {
+		return err
+	}
+	// Write the file info of the requested file so that the port doesn't time out
+	// You will asynchronously push the file right affter
+	conn.Write(encodedcheckResponse)
+
+	// Send the file CREATE message
+	encodedFileInfo, err = json.Marshal(fileInfoMap[getFileStruct.Name])
+	if err != nil {
+		return err
+	}
+	createMessage := Message{Kind: TEMP_CREATE, Data: string(encodedFileInfo)}
+	err = SendMessage(getFileStruct.Requester, createMessage)
+	if err != nil {
+		return err
+	}
+
+	// Send all the file blocks as APPEND messages
+	for _, eachhdfsfileblock := range fileBlockMap[getFileStruct.Name] {
+		// _, err = f.Write(eachhdfsfileblock.Content)
+		encodedFileBlock, err := json.Marshal(eachhdfsfileblock)
+		if err != nil {
+			return err
+		}
+		appendMessage := Message{Kind: TEMP_APPEND, Data: string(encodedFileBlock)}
+		err = SendMessage(getFileStruct.Requester, appendMessage)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
