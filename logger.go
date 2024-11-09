@@ -76,6 +76,12 @@ func PrintMessage(direction string, message Message, nodeId string) {
 	case GETFILE:
 		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] GETFILE message with %s\n", currentTime, direction, nodeId, message.Data)
 
+	case MERGE:
+		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] MERGE message with %s\n", currentTime, direction, nodeId, message.Data)
+
+	case DELETE:
+		fmt.Fprintf(log_file_writer, "[%s] [%s] [%s] DELETE message with %s\n", currentTime, direction, nodeId, message.Data)
+
 	default:
 		fmt.Fprintf(log_file_writer, "[%s] [%s] ********Trying to print unknown message type: %d**********", currentTime, direction, message.Kind)
 	}

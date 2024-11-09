@@ -116,6 +116,8 @@ func main() {
 		case demoArgs[0] == "listfiles":
 			filenames := GetFilesNamesOnNode()
 			fmt.Print(filenames)
+		case demoArgs[0] == "merge":
+			MergeHDFSFile(demoArgs[1])
 		}
 	}
 }

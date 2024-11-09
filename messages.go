@@ -18,6 +18,8 @@ const (
 	GETFILE     MessageType = 8
 	TEMP_CREATE MessageType = 9
 	TEMP_APPEND MessageType = 10
+	DELETE      MessageType = 11
+	MERGE       MessageType = 12
 
 	// Piggybacked message types.
 	LEAVE MessageType = 16
