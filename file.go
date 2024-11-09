@@ -280,6 +280,8 @@ func RequestFile(hdfsfilename string) error {
 func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
 	fmt.Printf("Getting HDFS File %s to local file %s", hdfsfilename, localfilename)
 
+	var fileBlockMapToUse map[string][]*FileBlock
+
 	if GetPrimaryReplicaForFile(hdfsfilename) != NODE_ID {
 		// Get the file from the primary replica, since it would be the most recent
 		err := RequestFile(hdfsfilename)
@@ -287,6 +289,9 @@ func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
 			// This node was unable to get the file for some reason
 			return err
 		}
+		fileBlockMapToUse = tempFileBlockMap
+	} else {
+		fileBlockMapToUse = fileBlockMap
 	}
 
 	// Create the local file
@@ -297,7 +302,7 @@ func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
 	defer f.Close()
 
 	// For each fileblock, write it to the localfile
-	for _, eachhdfsfileblock := range tempFileBlockMap[hdfsfilename] {
+	for _, eachhdfsfileblock := range fileBlockMapToUse[hdfsfilename] {
 		_, err = f.Write(eachhdfsfileblock.Content)
 		if err != nil {
 			return err
