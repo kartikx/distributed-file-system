@@ -229,48 +229,55 @@ func RequestFile(hdfsfilename string) error {
 
 	// Send a CHECK message and get the response CHECK message
 	responseMessage, err := SendMessageGetReply(fileNodeId, checkMessage)
-	if err == nil {
-		var responseFileInfo FileInfo
-		err := json.Unmarshal([]byte(responseMessage.Data), &responseFileInfo)
-		// If the file does not exist, response FileInfo has an empty filename
+	if err != nil {
+		return err
+	}
+
+	var responseFileInfo FileInfo
+	err = json.Unmarshal([]byte(responseMessage.Data), &responseFileInfo)
+
+	// If the file does not exist, response FileInfo has an empty filename
+	if err != nil {
+		return err
+	}
+
+	if responseFileInfo.Name == "" {
+		return fmt.Errorf("primary replica does not have the HDFS file %s", hdfsfilename)
+	} else {
+		// Make a new struct to have info about who is requesting what
+		getMessageStruct := GetMessage{Name: hdfsfilename, Requester: NODE_ID}
+		encodedGetMessageStruct, err := json.Marshal(getMessageStruct)
 		if err != nil {
 			return err
 		}
-		if responseFileInfo.Name == "" {
-			return fmt.Errorf("primary replica does not have the HDFS file %s", hdfsfilename)
-		} else {
-			// Make a new struct to have info about who is requesting what
-			getMessageStruct := GetMessage{Name: hdfsfilename, Requester: NODE_ID}
-			encodedGetMessageStruct, err := json.Marshal(getMessageStruct)
-			if err != nil {
-				return err
+		// Construct a message to ask for a file
+		getFileMessage := Message{Kind: GETFILE, Data: string(encodedGetMessageStruct)}
+		// Send a GETFILE message
+		err = SendMessage(fileNodeId, getFileMessage)
+		if err != nil {
+			return fmt.Errorf("unable to requeset file %s from %s", hdfsfilename, fileNodeId)
+		}
+
+		// Wait till you get the file info
+		// TODO @kartikr2 This could throw a race condition.
+		var newFileInfo *FileInfo
+		for {
+			_, ok := tempFileInfoMap[hdfsfilename]
+			if ok {
+				newFileInfo = tempFileInfoMap[hdfsfilename]
+				break
 			}
-			// Construct a message to ask for a file
-			getFileMessage := Message{Kind: GETFILE, Data: string(encodedGetMessageStruct)}
-			// Send a GETFILE message
-			err = SendMessage(fileNodeId, getFileMessage)
-			if err != nil {
-				return fmt.Errorf("unable to requeset file %s from %s", hdfsfilename, fileNodeId)
+			time.Sleep(500 * time.Millisecond)
+		}
+
+		// Wait till you get all the blocks (maximum of 10 seconds)
+		waitStart := time.Now()
+		for {
+			if (responseFileInfo.NumBlocks <= newFileInfo.NumBlocks) || (time.Since(waitStart).Seconds() > 10) {
+				break
 			}
 
-			// Wait till you get the file info
-			var newFileInfo FileInfo
-			for {
-				_, ok := tempFileInfoMap[hdfsfilename]
-				if ok {
-					newFileInfo = *tempFileInfoMap[hdfsfilename]
-					break
-				}
-			}
-
-			// Wait till you get all the blocks (maximum of 10 seconds)
-			waitStart := time.Now()
-			for {
-				if (responseFileInfo.NumBlocks <= newFileInfo.NumBlocks) || (time.Since(waitStart).Seconds() > 10) {
-					break
-				}
-				time.Sleep(1 * time.Second)
-			}
+			time.Sleep(1 * time.Second)
 		}
 	}
 
