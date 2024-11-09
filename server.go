@@ -92,21 +92,21 @@ func startServer(clientServerChan chan int) {
 		case TEMP_APPEND:
 			err = ProcessAppendMessage(message, true)
 		case CHECK:
-			err = ProcessCheckMessage(message, conn)
+			err = ProcessCheckMessage(message, conn, remoteAddress)
 			if err != nil {
 				fmt.Println(err.Error())
 			}
 			conn.Close()
 			continue
 		case FILES:
-			err = ProcessFilesMessage(message, conn)
+			err = ProcessFilesMessage(message, conn, remoteAddress)
 			if err != nil {
 				fmt.Println(err.Error())
 			}
 			conn.Close()
 			continue
 		case GETFILE:
-			err = ProcessGetFileMessage(message, server, address)
+			err = ProcessGetFileMessage(message, conn, remoteAddress)
 			if err != nil {
 				fmt.Println(err.Error())
 			}
@@ -254,8 +254,8 @@ func ProcessAppendMessage(message Message, isTemp bool) error {
 	return AppendToLocalFile(fileBlock.Name, fileBlock.Content, isTemp)
 }
 
-func ProcessCheckMessage(message Message, conn net.Conn) error {
-	PrintMessage("incoming", message, "")
+func ProcessCheckMessage(message Message, conn net.Conn, remoteAddress string) error {
+	PrintMessage("incoming", message, remoteAddress)
 
 	filenameToCheck := message.Data
 
@@ -282,8 +282,8 @@ func ProcessCheckMessage(message Message, conn net.Conn) error {
 	return nil
 }
 
-func ProcessFilesMessage(message Message, conn net.Conn) error {
-	PrintMessage("incoming", message, "")
+func ProcessFilesMessage(message Message, conn net.Conn, remoteAddress string) error {
+	PrintMessage("incoming", message, remoteAddress)
 
 	filenames := GetFilesNamesOnNode()
 
@@ -304,8 +304,8 @@ func ProcessFilesMessage(message Message, conn net.Conn) error {
 	return nil
 }
 
-func ProcessGetFileMessage(message Message, server *net.UDPConn, address *net.UDPAddr) error {
-	PrintMessage("incoming", message, "")
+func ProcessGetFileMessage(message Message, conn net.Conn, remoteAddress string) error {
+	PrintMessage("incoming", message, remoteAddress)
 
 	encodedGetFileRequest := message.Data
 
@@ -333,7 +333,7 @@ func ProcessGetFileMessage(message Message, server *net.UDPConn, address *net.UD
 	}
 	// Write the file info of the requested file so that the port doesn't time out
 	// You will asynchronously push the file right affter
-	server.WriteToUDP(encodedcheckResponse, address)
+	conn.Write(encodedcheckResponse)
 
 	// Send the file CREATE message
 	encodedFileInfo, err = json.Marshal(fileInfoMap[getFileStruct.Name])

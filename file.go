@@ -507,7 +507,6 @@ func ReplicateFiles(files []*FileInfo) error {
 				return err
 			}
 
-			// TODO @kartikr2 Can UDP mess up packet ordering?
 			for _, fileBlockToReplicate := range fileBlockMap[fileToReplicate] {
 				fmt.Println("APPEND replicate for ", fileToReplicate, fileBlockToReplicate.blockId)
 				LogMessage(fmt.Sprintf("APPEND replicate for [%s,%d] at [%s, %d]", fileToReplicate,
