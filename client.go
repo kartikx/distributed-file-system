@@ -31,11 +31,12 @@ func startClient(clientServerChan chan int) {
 }
 
 func PingMember(nodeId string) {
-	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	connection, err := net.Dial("tcp", GetServerEndpoint(membershipInfo[nodeId].Host))
 	if err != nil {
 		LogError(fmt.Sprintf("Node %s connection is nil, it might have been removed from the group\n",
 			nodeId))
-		DeleteMember(nodeId)
+		DeleteMemberAndReReplicate(nodeId)
+		return
 	}
 	defer connection.Close()
 
@@ -126,7 +127,7 @@ func SendAnyReplicationMessage(nodeId string, message Message, ch chan error) {
 		return
 	}
 
-	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	connection, err := net.Dial("tcp", GetServerEndpoint(membershipInfo[nodeId].Host))
 	if err != nil {
 		ch <- err
 		return
@@ -169,7 +170,7 @@ func SendReplicationMessages(nodeId string, files []*FileInfo, ch chan error) {
 		return
 	}
 
-	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	connection, err := net.Dial("tcp", GetServerEndpoint(membershipInfo[nodeId].Host))
 	if err != nil {
 		ch <- err
 		return
@@ -197,7 +198,7 @@ func SendMessage(nodeId string, message Message) error {
 		return err
 	}
 
-	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	connection, err := net.Dial("tcp", GetServerEndpoint(membershipInfo[nodeId].Host))
 	if err != nil {
 		return err
 	}
@@ -227,7 +228,7 @@ func SendMessageGetReply(nodeId string, message Message) (Message, error) {
 		return responseMessage, err
 	}
 
-	connection, err := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+	connection, err := net.Dial("tcp", GetServerEndpoint(membershipInfo[nodeId].Host))
 	if err != nil {
 		return responseMessage, err
 	}
@@ -261,7 +262,7 @@ func ExitGroup() {
 
 	members := GetMembers()
 	for nodeId := range members {
-		connection, _ := net.Dial("udp", GetServerEndpoint(membershipInfo[nodeId].Host))
+		connection, _ := net.Dial("tcp", GetServerEndpoint(membershipInfo[nodeId].Host))
 
 		if connection != nil {
 			var leaveMessage Message

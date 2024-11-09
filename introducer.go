@@ -6,15 +6,16 @@ import (
 	"net"
 )
 
-func IntroduceYourself() (map[string]MemberInfo, *net.Conn, error) {
-	conn, err := net.Dial("udp", GetServerEndpoint(INTRODUCER_SERVER_HOST))
+func IntroduceYourself() (map[string]MemberInfo, error) {
+	conn, err := net.Dial("tcp", GetServerEndpoint(INTRODUCER_SERVER_HOST))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+	defer conn.Close()
 
 	joinMessageEnc, err := GetEncodedJoinMessage()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// TODO @kartikr2 Once standard ping-ack implementations are re-verified, remove these logs.
@@ -28,17 +29,15 @@ func IntroduceYourself() (map[string]MemberInfo, *net.Conn, error) {
 	buffer := make([]byte, 1024)
 	mLen, err := conn.Read(buffer)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	members, err := parseMembersFromJoinResponse(buffer[:mLen])
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	LogMessage(fmt.Sprintf("Received members: ", members))
-
-	return members, &conn, nil
+	return members, nil
 }
 
 func parseMembersFromJoinResponse(buffer []byte) (map[string]MemberInfo, error) {
@@ -69,7 +68,7 @@ func parseMembersFromJoinResponse(buffer []byte) (map[string]MemberInfo, error) 
 
 // Initalizes the Membership Information map for the newly joined node.
 // Returns the NODE_ID for this node.
-func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_conn *net.Conn, localIP string) string {
+func InitializeMembershipInfoAndList(members map[string]MemberInfo, localIP string) string {
 	nodeId := ""
 
 	for id, memberInfo := range members {
@@ -98,11 +97,10 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, introducer_c
 }
 
 // Add nodes to membership list and returns a message containing all members.
-func IntroduceNodeToGroup(request string, addr *net.UDPAddr) (Message, error) {
+func IntroduceNodeToGroup(request string, ipAddr string) (Message, error) {
 	// TODO Add corner case checking, what if the introducer gets a looped around message from
 	// the past? It should check that the node doesn't already exist.
-
-	ipAddr := addr.IP.String()
+	// fmt.Printf("Introducing %s to the group\n", ipAddr)
 	nodeId := ConstructNodeID(ipAddr)
 
 	// fmt.Printf("IP: %s NodeID: %s", ipAddr, nodeId)

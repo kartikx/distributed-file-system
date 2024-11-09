@@ -37,12 +37,12 @@ func main() {
 	// TODO Add functionality to clean-up files from prior runs before you enter the system.
 	// TODO Add functionality to fetch files to replicate.
 	if !isIntroducer {
-		members, introducer_conn, err := IntroduceYourself()
+		members, err := IntroduceYourself()
 		if err != nil {
 			log.Fatalf("Unable to join the group: %s", err.Error())
 		}
 
-		NODE_ID = InitializeMembershipInfoAndList(members, introducer_conn, LOCAL_IP)
+		NODE_ID = InitializeMembershipInfoAndList(members, LOCAL_IP)
 
 		helloMessage := Message{
 			Kind: HELLO,
