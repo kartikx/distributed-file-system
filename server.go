@@ -80,9 +80,13 @@ func startServer(clientServerChan chan int) {
 			// TODO If there is an error we can indicate this to the client appropriately.
 			err = ProcessReplicateMessage(message)
 		case CREATE:
-			err = ProcessCreateMessage(message)
+			err = ProcessCreateMessage(message, false)
+		case TEMP_CREATE:
+			err = ProcessCreateMessage(message, true)
 		case APPEND:
-			err = ProcessAppendMessage(message)
+			err = ProcessAppendMessage(message, false)
+		case TEMP_APPEND:
+			err = ProcessAppendMessage(message, true)
 		case CHECK:
 			err = ProcessCheckMessage(message, server, address)
 			if err != nil {
@@ -213,7 +217,7 @@ func ProcessReplicateMessage(message Message) error {
 	return nil
 }
 
-func ProcessCreateMessage(message Message) error {
+func ProcessCreateMessage(message Message, isTemp bool) error {
 	PrintMessage("incoming", message, "")
 
 	encodedFileInfo := message.Data
@@ -225,10 +229,10 @@ func ProcessCreateMessage(message Message) error {
 		return err
 	}
 
-	return CreateLocalFile(fileInfo.Name)
+	return CreateLocalFile(fileInfo.Name, isTemp)
 }
 
-func ProcessAppendMessage(message Message) error {
+func ProcessAppendMessage(message Message, isTemp bool) error {
 	PrintMessage("incoming", message, "")
 
 	encodedFileBlock := message.Data
@@ -240,7 +244,7 @@ func ProcessAppendMessage(message Message) error {
 		return err
 	}
 
-	return AppendToLocalFile(fileBlock.Name, fileBlock.Content)
+	return AppendToLocalFile(fileBlock.Name, fileBlock.Content, isTemp)
 }
 
 func ProcessCheckMessage(message Message, server *net.UDPConn, address *net.UDPAddr) error {
@@ -327,7 +331,7 @@ func ProcessGetFileMessage(message Message, server *net.UDPConn, address *net.UD
 	if err != nil {
 		return err
 	}
-	createMessage := Message{Kind: CREATE, Data: string(encodedFileInfo)}
+	createMessage := Message{Kind: TEMP_CREATE, Data: string(encodedFileInfo)}
 	err = SendMessage(getFileStruct.Requester, createMessage)
 	if err != nil {
 		return err
@@ -340,7 +344,7 @@ func ProcessGetFileMessage(message Message, server *net.UDPConn, address *net.UD
 		if err != nil {
 			return err
 		}
-		appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
+		appendMessage := Message{Kind: TEMP_APPEND, Data: string(encodedFileBlock)}
 		err = SendMessage(getFileStruct.Requester, appendMessage)
 		if err != nil {
 			return err
