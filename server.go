@@ -8,16 +8,12 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 )
 
 func startServer(clientServerChan chan int) {
-	addr := &net.UDPAddr{
-		IP:   net.ParseIP(SERVER_HOST),
-		Port: SERVER_PORT,
-		Zone: "",
-	}
 
-	server, err := net.ListenUDP("udp", addr)
+	server, err := net.Listen("tcp", fmt.Sprintf(":%d", SERVER_PORT))
 
 	if err != nil {
 		log.Fatalf("Couldn't start server: %s", err.Error())
@@ -26,22 +22,30 @@ func startServer(clientServerChan chan int) {
 	clientServerChan <- 1
 
 	for {
-		buf := make([]byte, 8192)
-		mlen, address, err := server.ReadFromUDP(buf)
+		conn, err := server.Accept()
 
 		if err != nil {
 			log.Fatalf("Error accepting: %s", err.Error())
 		}
+		// TODO @kartikr2 Should I process each packet in a GoRoutine? Could it cause any issues with sync?
+		// Can't defer here because inf loop.
+		// defer conn.Close()
+
+		// TODO @kartikr2 Larger buffers to handle larger files.
+		buf := make([]byte, 8192)
+		mlen, err := conn.Read(buf)
 
 		var message Message
 		json.Unmarshal(buf[:mlen], &message)
 
 		var messagesToPiggyback Messages
 
+		remoteAddress := strings.Split(conn.RemoteAddr().String(), ":")[0]
+
 		switch message.Kind {
 		case PING:
 			messagesToPiggyback = GetUnexpiredPiggybackMessages()
-			PrintMessage("Incoming", message, address.IP.String())
+			PrintMessage("Incoming", message, remoteAddress)
 			var messages Messages
 			err = json.Unmarshal([]byte(message.Data), &messages)
 
@@ -65,7 +69,7 @@ func startServer(clientServerChan chan int) {
 			}
 		case JOIN:
 			PrintMessage("Incoming", message, "")
-			responseMessage, err := ProcessJoinMessage(message, address)
+			responseMessage, err := ProcessJoinMessage(message, remoteAddress)
 			if err != nil {
 				log.Fatalln("Failed to process join message", message)
 			}
@@ -84,16 +88,18 @@ func startServer(clientServerChan chan int) {
 		case APPEND:
 			err = ProcessAppendMessage(message)
 		case CHECK:
-			err = ProcessCheckMessage(message, server, address)
+			err = ProcessCheckMessage(message, conn)
 			if err != nil {
 				fmt.Println(err.Error())
 			}
+			conn.Close()
 			continue
 		case FILES:
-			err = ProcessFilesMessage(message, server, address)
+			err = ProcessFilesMessage(message, conn)
 			if err != nil {
 				fmt.Println(err.Error())
 			}
+			conn.Close()
 			continue
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
@@ -117,18 +123,19 @@ func startServer(clientServerChan chan int) {
 		}
 		PrintMessage("outgoing", ackMessage, "")
 
-		server.WriteToUDP(ackResponse, address)
+		conn.Write(ackResponse)
+		conn.Close()
 	}
 }
 
 // request contains the encoded Data of the JOIN message.
 // addr is the address of the host that sent this PING.
-func ProcessJoinMessage(message Message, addr *net.UDPAddr) (Message, error) {
+func ProcessJoinMessage(message Message, addr string) (Message, error) {
 	if isIntroducer {
 		joinResponse, err := IntroduceNodeToGroup(message.Data, addr)
 		return joinResponse, err
 	} else {
-		return Message{}, fmt.Errorf("Unexpected JOIN message received for non Introducer node")
+		return Message{}, fmt.Errorf("unexpected JOIN message received for non Introducer node")
 	}
 }
 
@@ -237,7 +244,7 @@ func ProcessAppendMessage(message Message) error {
 	return AppendToLocalFile(fileBlock.Name, fileBlock.Content)
 }
 
-func ProcessCheckMessage(message Message, server *net.UDPConn, address *net.UDPAddr) error {
+func ProcessCheckMessage(message Message, conn net.Conn) error {
 	PrintMessage("incoming", message, "")
 
 	filenameToCheck := message.Data
@@ -254,17 +261,18 @@ func ProcessCheckMessage(message Message, server *net.UDPConn, address *net.UDPA
 		return err
 	}
 	checkResponse := Message{Kind: CHECK, Data: string(encodedFileInfo)}
-	encodedcheckResponse, err := json.Marshal(checkResponse)
+	encodedCheckResponse, err := json.Marshal(checkResponse)
 	if err != nil {
 		return err
 	}
 
-	server.WriteToUDP(encodedcheckResponse, address)
+	conn.Write(encodedCheckResponse)
+	conn.Close()
 
 	return nil
 }
 
-func ProcessFilesMessage(message Message, server *net.UDPConn, address *net.UDPAddr) error {
+func ProcessFilesMessage(message Message, conn net.Conn) error {
 	PrintMessage("incoming", message, "")
 
 	filenames := GetFilesNamesOnNode()
@@ -280,7 +288,8 @@ func ProcessFilesMessage(message Message, server *net.UDPConn, address *net.UDPA
 		return err
 	}
 
-	server.WriteToUDP(encodedFilesResponse, address)
+	conn.Write(encodedFilesResponse)
+	conn.Close()
 
 	return nil
 }
