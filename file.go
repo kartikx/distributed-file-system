@@ -280,11 +280,13 @@ func RequestFile(hdfsfilename string) error {
 func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
 	fmt.Printf("Getting HDFS File %s to local file %s", hdfsfilename, localfilename)
 
-	// Get the file from the primary replica, since it would be the most recent
-	err := RequestFile(hdfsfilename)
-	if err != nil {
-		// This node was unable to get the file for some reason
-		return err
+	if GetPrimaryReplicaForFile(hdfsfilename) != NODE_ID {
+		// Get the file from the primary replica, since it would be the most recent
+		err := RequestFile(hdfsfilename)
+		if err != nil {
+			// This node was unable to get the file for some reason
+			return err
+		}
 	}
 
 	// Create the local file
