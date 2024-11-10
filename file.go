@@ -116,6 +116,13 @@ func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 
 // Load the localfile and append it to an existing file on HyDFS
 func AppendToHDFSFile(localfilename string, hdfsfilename string) error {
+	// Clear cache entry to prevent stale reads.
+	if CACHE_ENABLED {
+		delete(tempFileInfoMap, hdfsfilename)
+		delete(tempFileBlockMap, hdfsfilename)
+		cacheFileMap.Remove(hdfsfilename)
+	}
+
 	nodeId := GetPrimaryReplicaForFile(hdfsfilename)
 
 	fmt.Println("File hash: ", GetRingPosition(hdfsfilename))
@@ -290,11 +297,17 @@ func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
 	var fileBlockMapToUse map[string][]*FileBlock
 
 	if GetPrimaryReplicaForFile(hdfsfilename) != NODE_ID {
-		// Get the file from the primary replica, since it would be the most recent
-		err := RequestFile(hdfsfilename)
-		if err != nil {
-			// This node was unable to get the file for some reason
-			return err
+		if !(CACHE_ENABLED && GetCache(hdfsfilename)) {
+			// Get the file from the primary replica, since it would be the most recent
+			err := RequestFile(hdfsfilename)
+			if err != nil {
+				// This node was unable to get the file for some reason
+				return err
+			}
+
+			if CACHE_ENABLED {
+				SetCache(hdfsfilename)
+			}
 		}
 		fileBlockMapToUse = tempFileBlockMap
 	} else {
@@ -316,9 +329,10 @@ func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
 		}
 	}
 
-	// Done with this file. Delete it so that the next GET would request for it again
-	delete(tempFileInfoMap, hdfsfilename)
-	delete(tempFileBlockMap, hdfsfilename)
+	if !CACHE_ENABLED {
+		delete(tempFileInfoMap, hdfsfilename)
+		delete(tempFileBlockMap, hdfsfilename)
+	}
 
 	return nil
 }
