@@ -396,7 +396,7 @@ func GetHDFSToLocal(hdfsfilename string, localfilename string, nodeIdToRequest s
 			if CACHE_ENABLED {
 				SetCache(hdfsfilename)
 			}
-
+		}
 		fileBlockMapToUse = tempFileBlockMap
 	} else {
 		fileBlockMapToUse = fileBlockMap
@@ -423,6 +423,10 @@ func GetHDFSToLocal(hdfsfilename string, localfilename string, nodeIdToRequest s
 	}
 
 	return nil
+}
+
+func Hello() {
+
 }
 
 func AppendToLocalFile(filename string, content []byte, isTemp bool) error {
