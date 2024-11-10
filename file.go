@@ -18,7 +18,8 @@ type FileInfo struct {
 	Name      string
 	NumBlocks int
 	// Shouldn't be exported, because different nodes will have different isPrimary values for the same file.
-	isPrimary bool
+	isPrimary  bool
+	mostRecent bool
 }
 
 type FileBlock struct {
@@ -66,6 +67,22 @@ func PrintStoredFiles() {
 	fmt.Println("===")
 }
 
+func PrintMachinesWithFile(hdfsfilename string) {
+	// Assuming that the primary replica and the secondary replica information is correct
+
+	primaryNodeId := GetPrimaryReplicaForFile(hdfsfilename)
+
+	fmt.Printf("File %s is stored on:\n", hdfsfilename)
+	fmt.Printf("\t%s (%d)\n", primaryNodeId, GetRingPosition(primaryNodeId))
+
+	successors := GetRingSuccessors(RING_POSITION)
+
+	for _, succ := range successors {
+		fmt.Printf("\t%s (%d)\n", succ, GetRingPosition(succ))
+	}
+
+}
+
 func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 	nodeId := GetPrimaryReplicaForFile(hdfsfilename)
 
@@ -76,7 +93,7 @@ func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 		return err
 	}
 
-	fileInfo := FileInfo{hdfsfilename, 0, false}
+	fileInfo := FileInfo{hdfsfilename, 0, false, true}
 	encodedFileInfo, err := json.Marshal(fileInfo)
 
 	if err != nil {
@@ -173,7 +190,7 @@ func CreateLocalFile(filename string, isTemp bool) error {
 		isPrimaryReplica = true
 	}
 
-	fileInfo := &FileInfo{filename, 0, isPrimaryReplica}
+	fileInfo := &FileInfo{filename, 0, isPrimaryReplica, true}
 
 	var fileInfoMapToUse map[string]*FileInfo
 	if isTemp {
@@ -202,7 +219,7 @@ func CreateLocalFile(filename string, isTemp bool) error {
 
 	// If you are the primary replica for this file, make the successors create the file too
 	if GetPrimaryReplicaForFile(filename) == NODE_ID {
-		replicateFileInfo := FileInfo{filename, 0, isPrimaryReplica}
+		replicateFileInfo := FileInfo{filename, 0, isPrimaryReplica, true}
 		encodedFileInfo, err := json.Marshal(replicateFileInfo)
 		if err != nil {
 			return err
@@ -219,12 +236,17 @@ func CreateLocalFile(filename string, isTemp bool) error {
 	return err
 }
 
-func RequestFile(hdfsfilename string) error {
+func RequestFile(hdfsfilename string, inputFileNodeId string) error {
+
+	// If you don't want to request from a particular node, get it from the primary replica
+	var fileNodeId string
+	if inputFileNodeId == "" {
+		fileNodeId = GetPrimaryReplicaForFile(hdfsfilename)
+	} else {
+		fileNodeId = inputFileNodeId
+	}
 
 	// Do a CHECK to find if the primary replica has the file
-	// TODO @sdevata2 perhaps from the other replicas too?
-	fileNodeId := GetPrimaryReplicaForFile(hdfsfilename)
-
 	checkMessage := Message{Kind: CHECK, Data: hdfsfilename}
 
 	// Send a CHECK message and get the response CHECK message
@@ -284,14 +306,80 @@ func RequestFile(hdfsfilename string) error {
 	return nil
 }
 
-func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
+func MergeHDFSFile(hdfsfilename string) error {
+
+	if GetPrimaryReplicaForFile(hdfsfilename) == NODE_ID {
+		if fileInfoMap[hdfsfilename].mostRecent {
+			// The file has been merged recently with no new appends to it
+			fmt.Printf("File %s has had no recent updates. Merge is a no-op\n", hdfsfilename)
+			return nil
+		}
+
+		successors := GetRingSuccessors(RING_POSITION)
+
+		for _, succ := range successors {
+			// Delete this file on the successors
+			deleteMessage := Message{Kind: DELETE, Data: hdfsfilename}
+			err := SendMessage(succ, deleteMessage)
+			if err != nil {
+				return err
+			}
+			// TODO do we need this? This is just to make sure that the DELETE message is processed on the replicas
+			time.Sleep(1 * time.Second)
+		}
+
+		// (Re)Create the file on the successors
+		// Make a new FileInfo with 0 blocks to send to the replicas
+		replicateFileInfo := FileInfo{hdfsfilename, 0, false, true}
+		encodedFileInfo, err := json.Marshal(replicateFileInfo)
+		if err != nil {
+			return err
+		}
+		createMessage := Message{Kind: CREATE, Data: string(encodedFileInfo)}
+		// Wait for both replicas to create the file
+		err = PerformReplication(createMessage, true)
+		if err != nil {
+			return err
+		}
+
+		// Send all the appends to the successors
+		for _, eachhdfsfileblock := range fileBlockMap[hdfsfilename] {
+			encodedFileBlock, err := json.Marshal(*eachhdfsfileblock)
+			if err != nil {
+				return err
+			}
+			appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
+			// Wait for both replicas to do the append
+			err = PerformReplication(appendMessage, true)
+			if err != nil {
+				return err
+			}
+
+		}
+
+		// Subsequent immediate merges will be a no-op
+		fileInfoMap[hdfsfilename].mostRecent = true
+
+	} else {
+		nodeId := GetPrimaryReplicaForFile(hdfsfilename)
+		mergeMessage := Message{Kind: MERGE, Data: hdfsfilename}
+		err := SendMessage(nodeId, mergeMessage)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func GetHDFSToLocal(hdfsfilename string, localfilename string, nodeIdToRequest string) error {
 	fmt.Printf("Getting HDFS File %s to local file %s", hdfsfilename, localfilename)
 
 	var fileBlockMapToUse map[string][]*FileBlock
 
-	if GetPrimaryReplicaForFile(hdfsfilename) != NODE_ID {
-		// Get the file from the primary replica, since it would be the most recent
-		err := RequestFile(hdfsfilename)
+	if (GetPrimaryReplicaForFile(hdfsfilename) != NODE_ID) || (nodeIdToRequest != "") {
+		// Either get the file from the primary replica (implemented in Request file) or from the specific node
+		err := RequestFile(hdfsfilename, nodeIdToRequest)
 		if err != nil {
 			// This node was unable to get the file for some reason
 			return err
@@ -341,6 +429,9 @@ func AppendToLocalFile(filename string, content []byte, isTemp bool) error {
 	if !ok {
 		return fmt.Errorf("trying to append to a file that does not exist")
 	}
+
+	// Used for both caching and in merge
+	fileInfoMapToUse[filename].mostRecent = false
 
 	fileBlock := &FileBlock{filename, content, fileInfoMapToUse[filename].NumBlocks}
 	fileBlockMapToUse[filename] = append(fileBlockMapToUse[filename], fileBlock)
@@ -490,7 +581,7 @@ func ReplicateFiles(files []*FileInfo) error {
 			fmt.Println("CREATE replicate for ", fileToReplicate)
 			LogMessage(fmt.Sprintf("CREATE replicate for %s at [%s, %d]", fileToReplicate, succ, GetRingPosition(succ)))
 
-			encodedFileInfo, err := json.Marshal(FileInfo{fileToReplicate, 0, false})
+			encodedFileInfo, err := json.Marshal(FileInfo{fileToReplicate, 0, false, false})
 			if err != nil {
 				return err
 			}
@@ -512,7 +603,6 @@ func ReplicateFiles(files []*FileInfo) error {
 				LogMessage(fmt.Sprintf("APPEND replicate for [%s,%d] at [%s, %d]", fileToReplicate,
 					fileBlockToReplicate.blockId, succ, GetRingPosition(succ)))
 
-				// TODO @sdevata2 Is passing 0 correct?
 				replicateFileBlock := FileBlock{fileToReplicate, fileBlockToReplicate.Content, 0}
 				encodedFileBlock, err := json.Marshal(replicateFileBlock)
 				if err != nil {
