@@ -67,6 +67,22 @@ func PrintStoredFiles() {
 	fmt.Println("===")
 }
 
+func PrintMachinesWithFile(hdfsfilename string) {
+	// Assuming that the primary replica and the secondary replica information is correct
+
+	primaryNodeId := GetPrimaryReplicaForFile(hdfsfilename)
+
+	fmt.Printf("File %s is stored on:\n", hdfsfilename)
+	fmt.Printf("\t%s (%d)\n", primaryNodeId, GetRingPosition(primaryNodeId))
+
+	successors := GetRingSuccessors(RING_POSITION)
+
+	for _, succ := range successors {
+		fmt.Printf("\t%s (%d)\n", succ, GetRingPosition(succ))
+	}
+
+}
+
 func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 	nodeId := GetPrimaryReplicaForFile(hdfsfilename)
 
@@ -220,11 +236,17 @@ func CreateLocalFile(filename string, isTemp bool) error {
 	return err
 }
 
-func RequestFile(hdfsfilename string) error {
+func RequestFile(hdfsfilename string, inputFileNodeId string) error {
+
+	// If you don't want to request from a particular node, get it from the primary replica
+	var fileNodeId string
+	if inputFileNodeId == "" {
+		fileNodeId = GetPrimaryReplicaForFile(hdfsfilename)
+	} else {
+		fileNodeId = inputFileNodeId
+	}
 
 	// Do a CHECK to find if the primary replica has the file
-	fileNodeId := GetPrimaryReplicaForFile(hdfsfilename)
-
 	checkMessage := Message{Kind: CHECK, Data: hdfsfilename}
 
 	// Send a CHECK message and get the response CHECK message
@@ -350,14 +372,14 @@ func MergeHDFSFile(hdfsfilename string) error {
 	return nil
 }
 
-func GetHDFSToLocal(hdfsfilename string, localfilename string) error {
+func GetHDFSToLocal(hdfsfilename string, localfilename string, nodeIdToRequest string) error {
 	fmt.Printf("Getting HDFS File %s to local file %s", hdfsfilename, localfilename)
 
 	var fileBlockMapToUse map[string][]*FileBlock
 
-	if GetPrimaryReplicaForFile(hdfsfilename) != NODE_ID {
-		// Get the file from the primary replica, since it would be the most recent
-		err := RequestFile(hdfsfilename)
+	if (GetPrimaryReplicaForFile(hdfsfilename) != NODE_ID) || (nodeIdToRequest != "") {
+		// Either get the file from the primary replica (implemented in Request file) or from the specific node
+		err := RequestFile(hdfsfilename, nodeIdToRequest)
 		if err != nil {
 			// This node was unable to get the file for some reason
 			return err
