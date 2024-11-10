@@ -110,7 +110,17 @@ func startServer(clientServerChan chan int) {
 			if err != nil {
 				fmt.Println(err.Error())
 			}
+			conn.Close()
 			continue
+		case MERGE:
+			err = ProcessMergeMessage(message, conn, remoteAddress)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+			conn.Close()
+			continue
+		case DELETE:
+			err = ProcessDeleteMessage(message)
 		default:
 			log.Fatalln("Unexpected message kind: ", message)
 		}
@@ -252,6 +262,47 @@ func ProcessAppendMessage(message Message, isTemp bool) error {
 	}
 
 	return AppendToLocalFile(fileBlock.Name, fileBlock.Content, isTemp)
+}
+
+func ProcessDeleteMessage(message Message) error {
+	PrintMessage("incoming", message, "")
+
+	hdfsfilename := message.Data
+	delete(fileInfoMap, hdfsfilename)
+	delete(fileBlockMap, hdfsfilename)
+
+	return nil
+}
+
+func ProcessMergeMessage(message Message, conn net.Conn, remoteAddress string) error {
+	PrintMessage("incoming", message, "")
+
+	hdfsFileName := message.Data
+
+	// Send the FileInfo just so that the connection does not timeout
+	var checkFileInfo FileInfo
+
+	_, ok := fileInfoMap[hdfsFileName]
+	if ok {
+		checkFileInfo = *fileInfoMap[hdfsFileName]
+	}
+
+	encodedFileInfo, err := json.Marshal(checkFileInfo)
+	if err != nil {
+		return err
+	}
+	checkResponse := Message{Kind: CHECK, Data: string(encodedFileInfo)}
+	encodedCheckResponse, err := json.Marshal(checkResponse)
+	if err != nil {
+		return err
+	}
+
+	conn.Write(encodedCheckResponse)
+	conn.Close()
+
+	MergeHDFSFile(hdfsFileName)
+
+	return nil
 }
 
 func ProcessCheckMessage(message Message, conn net.Conn, remoteAddress string) error {

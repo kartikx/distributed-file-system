@@ -112,10 +112,16 @@ func main() {
 		case demoArgs[0] == "append":
 			AppendToHDFSFile(demoArgs[1], demoArgs[2])
 		case demoArgs[0] == "get":
-			GetHDFSToLocal(demoArgs[1], demoArgs[2])
+			GetHDFSToLocal(demoArgs[1], demoArgs[2], "")
+		case demoArgs[0] == "getfromreplica":
+			GetHDFSToLocal(demoArgs[2], demoArgs[3], demoArgs[1])
 		case demoArgs[0] == "listfiles":
 			filenames := GetFilesNamesOnNode()
 			fmt.Print(filenames)
+		case demoArgs[0] == "merge":
+			MergeHDFSFile(demoArgs[1])
+		case demoArgs[0] == "ls":
+			PrintMachinesWithFile(demoArgs[1])
 		}
 	}
 }
