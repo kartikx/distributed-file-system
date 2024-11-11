@@ -1,3 +1,5 @@
+// This file stores implementation for the HyDFS file functions.
+
 package main
 
 import (
@@ -8,12 +10,19 @@ import (
 	"time"
 )
 
+// Stores information for the HyDFS files stored on this node.
 var fileInfoMap = map[string]*FileInfo{}
+
+// Stores file blocks for each HyDFS file on this node.
 var fileBlockMap = map[string][]*FileBlock{}
 
+// Similar to fileInfoMap, only used when receiving files on a GET request.
 var tempFileInfoMap = map[string]*FileInfo{}
+
+// Similar to fileBlockMap, only used when receiving files on a GET request.
 var tempFileBlockMap = map[string][]*FileBlock{}
 
+// Stores information about a HyDFS file.
 type FileInfo struct {
 	Name      string
 	NumBlocks int
@@ -22,6 +31,7 @@ type FileInfo struct {
 	mostRecent bool
 }
 
+// Stores file contents for a HyDFS file.
 type FileBlock struct {
 	Name    string
 	Content []byte
@@ -83,6 +93,7 @@ func PrintMachinesWithFile(hdfsfilename string) {
 
 }
 
+// Create a file on the HDFS.
 func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 	nodeId := GetPrimaryReplicaForFile(hdfsfilename)
 
@@ -211,7 +222,6 @@ func CreateLocalFile(filename string, isTemp bool) error {
 	if !ok {
 		fileInfoMapToUse[fileInfo.Name] = fileInfo
 	} else {
-		// TODO @kartikr2 Throw error if file already exists. Should be propagated across the network.
 		return fmt.Errorf("file already exists on the HDFS")
 	}
 
@@ -243,6 +253,7 @@ func CreateLocalFile(filename string, isTemp bool) error {
 	return err
 }
 
+// Request for a file from the HyDFS. Optionally, request from a particular node.
 func RequestFile(hdfsfilename string, inputFileNodeId string) error {
 
 	// If you don't want to request from a particular node, get it from the primary replica
@@ -288,7 +299,6 @@ func RequestFile(hdfsfilename string, inputFileNodeId string) error {
 		}
 
 		// Wait till you get the file info
-		// TODO @kartikr2 This could throw a race condition.
 		var newFileInfo *FileInfo
 		for {
 			_, ok := tempFileInfoMap[hdfsfilename]
@@ -313,8 +323,8 @@ func RequestFile(hdfsfilename string, inputFileNodeId string) error {
 	return nil
 }
 
+// Initiates the Merge operation for the given HyDFS file.
 func MergeHDFSFile(hdfsfilename string) error {
-
 	if GetPrimaryReplicaForFile(hdfsfilename) == NODE_ID {
 		if fileInfoMap[hdfsfilename].mostRecent {
 			// The file has been merged recently with no new appends to it
@@ -331,7 +341,6 @@ func MergeHDFSFile(hdfsfilename string) error {
 			if err != nil {
 				return err
 			}
-			// TODO do we need this? This is just to make sure that the DELETE message is processed on the replicas
 			time.Sleep(1 * time.Second)
 		}
 
@@ -379,6 +388,7 @@ func MergeHDFSFile(hdfsfilename string) error {
 	return nil
 }
 
+// Get the hdfs file to the local disk, optionally request from a particular node Id.
 func GetHDFSToLocal(hdfsfilename string, localfilename string, nodeIdToRequest string) error {
 	fmt.Printf("Getting HDFS File %s to local file %s", hdfsfilename, localfilename)
 
@@ -425,10 +435,7 @@ func GetHDFSToLocal(hdfsfilename string, localfilename string, nodeIdToRequest s
 	return nil
 }
 
-func Hello() {
-
-}
-
+// Append contents to a file on disk.
 func AppendToLocalFile(filename string, content []byte, isTemp bool) error {
 	fmt.Println("Appending to file: ", filename)
 
@@ -606,9 +613,6 @@ func ReplicateFiles(files []*FileInfo) error {
 			createMessage := Message{Kind: CREATE, Data: string(encodedFileInfo)}
 
 			ch := make(chan error)
-			// TODO Are we even using the channel functionality anymore.
-			// I could keep ch common across all loop iterations.
-			// and just check that I received fileToReplicate responses (+ one of them could be an error)
 			go SendAnyReplicationMessage(succ, createMessage, ch)
 
 			err = <-ch
@@ -629,7 +633,6 @@ func ReplicateFiles(files []*FileInfo) error {
 
 				appendMessage := Message{Kind: APPEND, Data: string(encodedFileBlock)}
 
-				// TODO What if this node fails right after sending this? The next node should become the leader.
 				go SendAnyReplicationMessage(succ, appendMessage, ch)
 
 				// Send every append one-by-one, so that ordering of writes is maintained.

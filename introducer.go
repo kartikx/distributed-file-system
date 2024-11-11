@@ -18,7 +18,6 @@ func IntroduceYourself() (map[string]MemberInfo, error) {
 		return nil, err
 	}
 
-	// TODO @kartikr2 Once standard ping-ack implementations are re-verified, remove these logs.
 	var joinMessage Message
 	_ = json.Unmarshal(joinMessageEnc, &joinMessage)
 	localIP, _ := GetLocalIP()
@@ -98,9 +97,6 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, localIP stri
 
 // Add nodes to membership list and returns a message containing all members.
 func IntroduceNodeToGroup(request string, ipAddr string) (Message, error) {
-	// TODO Add corner case checking, what if the introducer gets a looped around message from
-	// the past? It should check that the node doesn't already exist.
-	// fmt.Printf("Introducing %s to the group\n", ipAddr)
 	nodeId := ConstructNodeID(ipAddr)
 
 	// fmt.Printf("IP: %s NodeID: %s", ipAddr, nodeId)

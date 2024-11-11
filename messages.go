@@ -6,7 +6,6 @@ import (
 
 const (
 	// Top level message types.
-	// TODO @kartikr2 Get rid of REPLICATE.
 	PING        MessageType = 0
 	ACK         MessageType = 1
 	JOIN        MessageType = 2
@@ -28,7 +27,6 @@ const (
 )
 
 type MemberInfo struct {
-	// TODO @kartikr2 Remove if unused.
 	failed bool
 
 	// Exported variables

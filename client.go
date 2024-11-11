@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// This starts the Client to repeatedly send PING messages to all members in the group.
 func startClient(clientServerChan chan int) {
 	// Ensures that sending starts after listener has started and introduction is complete.
 	_, _ = <-clientServerChan, <-clientServerChan
@@ -30,6 +31,7 @@ func startClient(clientServerChan chan int) {
 	}
 }
 
+// Sends a PING to a given node ID. Handles piggybacking of messages.
 func PingMember(nodeId string) {
 	connection, err := net.Dial("tcp", GetServerEndpoint(membershipInfo[nodeId].Host))
 	if err != nil {
@@ -74,7 +76,6 @@ func PingMember(nodeId string) {
 
 		LogMessage(fmt.Sprintf("DETECTED NODE %s as FAILED", nodeId))
 
-		// TODO @kartikr2 Remove
 		fmt.Printf("DETECTED NODE %s as FAILED\n", nodeId)
 
 		DeleteMemberAndReReplicate(nodeId)
@@ -136,8 +137,6 @@ func SendAnyReplicationMessage(nodeId string, message Message, ch chan error) {
 	connection.Write(encodedMessage)
 	buffer := make([]byte, 8192)
 
-	// TODO kartikr2 Could potentially read the response to see if the recipient encountered an error.
-	// What would happen if the recipient failed on receipt? Would this timeout, or pause indefinitely?
 	_, err = connection.Read(buffer)
 	if err != nil {
 		ch <- err
@@ -151,9 +150,6 @@ func SendAnyReplicationMessage(nodeId string, message Message, ch chan error) {
 // This is used for both, replicate-on-create and replicate-on-fail
 func SendReplicationMessages(nodeId string, files []*FileInfo, ch chan error) {
 	fmt.Printf("Sending %d Replication messages to %s\n", len(files), nodeId)
-
-	// TODO @kartikr2 We could potentially ask the node to reply  with the files that it has currently.
-	// and only send the ones it doesn't have.
 
 	encodedFiles, err := json.Marshal(files)
 	if err != nil {
@@ -185,13 +181,11 @@ func SendReplicationMessages(nodeId string, files []*FileInfo, ch chan error) {
 		return
 	}
 
-	// TODO You could take a look at the response from the replica.
-
 	ch <- nil
 }
 
+// Sends a message to the given Node.
 func SendMessage(nodeId string, message Message) error {
-
 	encodedMessage, err := json.Marshal(message)
 	if err != nil {
 		return err
@@ -217,6 +211,7 @@ func SendMessage(nodeId string, message Message) error {
 	return nil
 }
 
+// Sends a message to the given Node, waits for a reply, and returns the response.
 func SendMessageGetReply(nodeId string, message Message) (Message, error) {
 
 	// Make an object to store the reply message
@@ -249,6 +244,7 @@ func SendMessageGetReply(nodeId string, message Message) (Message, error) {
 	return responseMessage, err
 }
 
+// Leave the group.
 func ExitGroup() {
 	fmt.Printf("Exiting gracefully %s\n", NODE_ID)
 

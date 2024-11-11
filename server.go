@@ -27,11 +27,7 @@ func startServer(clientServerChan chan int) {
 		if err != nil {
 			log.Fatalf("Error accepting: %s", err.Error())
 		}
-		// TODO @kartikr2 Should I process each packet in a GoRoutine? Could it cause any issues with sync?
-		// Can't defer here because inf loop.
-		// defer conn.Close()
 
-		// TODO @kartikr2 Larger buffers to handle larger files.
 		buf := make([]byte, 8192)
 		mlen, err := conn.Read(buf)
 
@@ -81,7 +77,6 @@ func startServer(clientServerChan chan int) {
 		case REPLICATE:
 			// Replicate does not piggyback anything.
 
-			// TODO If there is an error we can indicate this to the client appropriately.
 			err = ProcessReplicateMessage(message)
 		case CREATE:
 			err = ProcessCreateMessage(message, false)

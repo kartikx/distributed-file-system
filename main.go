@@ -33,9 +33,6 @@ func main() {
 		isIntroducer = true
 	}
 
-	// TODO @kartikramesh Move this into a separate function
-	// TODO Add functionality to clean-up files from prior runs before you enter the system.
-	// TODO Add functionality to fetch files to replicate.
 	if !isIntroducer {
 		members, err := IntroduceYourself()
 		if err != nil {
@@ -72,8 +69,6 @@ func main() {
 		}
 	}()
 
-	// TODO make this more elaborate and in-line with demo expectations.
-	// Would be nice to move this into a separate file.
 	for {
 		var demoInstruction string
 		scanner := bufio.NewScanner(os.Stdin)
@@ -101,7 +96,6 @@ func main() {
 			} else {
 				fmt.Println("Error while creating file: ", err.Error())
 			}
-		// TODO @kartikr2 Create an APPEND function.
 		case demoArgs[0] == "print_succ":
 			ringSuccessors := GetRingSuccessors(RING_POSITION)
 			fmt.Print(ringSuccessors)
