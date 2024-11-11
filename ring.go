@@ -37,7 +37,7 @@ func GetRingSuccessors(ringPosition int) []string {
 	// TODO What to do if numNodes <= 2?
 
 	index := 0
-	for index < len(members) && members[index].RingPosition != RING_POSITION {
+	for index < len(members) && members[index].RingPosition != ringPosition {
 		index++
 	}
 

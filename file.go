@@ -75,7 +75,7 @@ func PrintMachinesWithFile(hdfsfilename string) {
 	fmt.Printf("File %s is stored on:\n", hdfsfilename)
 	fmt.Printf("\t%s (%d)\n", primaryNodeId, GetRingPosition(primaryNodeId))
 
-	successors := GetRingSuccessors(RING_POSITION)
+	successors := GetRingSuccessors(GetRingPosition(primaryNodeId))
 
 	for _, succ := range successors {
 		fmt.Printf("\t%s (%d)\n", succ, GetRingPosition(succ))

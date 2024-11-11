@@ -105,7 +105,7 @@ func main() {
 		case demoArgs[0] == "print_succ":
 			ringSuccessors := GetRingSuccessors(RING_POSITION)
 			fmt.Print(ringSuccessors)
-		case demoArgs[0] == "print_ring":
+		case demoArgs[0] == "list_ring":
 			PrintRing()
 		case demoArgs[0] == "store":
 			PrintStoredFiles()
@@ -113,9 +113,9 @@ func main() {
 			AppendToHDFSFile(demoArgs[1], demoArgs[2])
 		case demoArgs[0] == "get":
 			GetHDFSToLocal(demoArgs[1], demoArgs[2], "")
-		case demoArgs[0] == "getfromreplica":
+		case demoArgs[0] == "get_from_replica":
 			GetHDFSToLocal(demoArgs[2], demoArgs[3], demoArgs[1])
-		case demoArgs[0] == "listfiles":
+		case demoArgs[0] == "list_files":
 			filenames := GetFilesNamesOnNode()
 			fmt.Print(filenames)
 		case demoArgs[0] == "merge":

@@ -12,7 +12,7 @@ const (
 	PING_INTERVAL_MILLISECONDS     = 5000
 	RING_NUM_POINTS                = 1000
 	NUM_REPLICAS                   = 3
-	STORAGE_LOCATION               = "/home/sdevata2/hdfs/"
+	STORAGE_LOCATION               = "/home/kartikr2/hdfs/"
 	CACHE_ENABLED                  = true
 	CACHE_SIZE                     = 500
 	NUM_LOADED_FILES               = 1000
