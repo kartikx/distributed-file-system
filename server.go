@@ -146,7 +146,7 @@ func startServer(clientServerChan chan int) {
 // request contains the encoded Data of the JOIN message.
 // addr is the address of the host that sent this PING.
 func ProcessJoinMessage(message Message, addr string) (Message, error) {
-	if isIntroducer {
+	if isLeader {
 		joinResponse, err := IntroduceNodeToGroup(message.Data, addr)
 		return joinResponse, err
 	} else {

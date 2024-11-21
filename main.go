@@ -5,16 +5,14 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"time"
 )
 
 var NODE_ID = ""
 var LOCAL_IP = ""
 var RING_POSITION = -1
 
-var isIntroducer = false
+var isLeader = false
 
 func main() {
 	// Synchronizes start of client and server.
@@ -29,45 +27,16 @@ func main() {
 		log.Fatalf("Unable to get local IP")
 	}
 
-	if LOCAL_IP == INTRODUCER_SERVER_HOST {
-		isIntroducer = true
+	if LOCAL_IP == LEADER_SERVER_HOST {
+		isLeader = true
 	}
 
-	if !isIntroducer {
-		members, err := IntroduceYourself()
-		if err != nil {
-			log.Fatalf("Unable to join the group: %s", err.Error())
-		}
-
-		NODE_ID = InitializeMembershipInfoAndList(members, LOCAL_IP)
-
-		helloMessage := Message{
-			Kind: HELLO,
-			Data: NODE_ID,
-		}
-
-		AddPiggybackMessage(helloMessage)
-	} else {
-		NODE_ID = ConstructNodeID(INTRODUCER_SERVER_HOST)
-		RING_POSITION = GetRingPosition(NODE_ID)
-	}
+	JoinRing()
 
 	clientServerChan <- 1
 
 	// Dial connection.
 	go startClient(clientServerChan)
-
-	fmt.Println("Joined the group as: ", NODE_ID)
-
-	os_signals := make(chan os.Signal, 1)
-	signal.Notify(os_signals, os.Interrupt)
-	go func() {
-		for sig := range os_signals {
-			// sig is a ^C, handle it
-			fmt.Println("Application got an OS interrupt:", sig, "at", time.Now().Format(time.RFC3339))
-			os.Exit(0)
-		}
-	}()
 
 	for {
 		var demoInstruction string
@@ -79,6 +48,13 @@ func main() {
 		demoArgs := strings.Split(demoInstruction, " ")
 
 		switch {
+		case demoArgs[0] == "RainStorm":
+			if len(demoArgs) < 6 {
+				log.Println("Expected usage: \"Rainstorm <op1 _exe> <op2 _exe> " +
+					"<hydfs_src_file> <hydfs_dest_filename> <num_tasks>\"")
+				continue
+			}
+
 		case demoArgs[0] == "list_mem":
 			PrintMembershipInfo()
 		case demoArgs[0] == "list_self":

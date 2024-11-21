@@ -3,11 +3,35 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 )
 
+func JoinRing() {
+	if !isLeader {
+		members, err := IntroduceYourself()
+		if err != nil {
+			log.Fatalf("Unable to join the group: %s", err.Error())
+		}
+
+		NODE_ID = InitializeMembershipInfoAndList(members, LOCAL_IP)
+
+		helloMessage := Message{
+			Kind: HELLO,
+			Data: NODE_ID,
+		}
+
+		AddPiggybackMessage(helloMessage)
+	} else {
+		NODE_ID = ConstructNodeID(LEADER_SERVER_HOST)
+		RING_POSITION = GetRingPosition(NODE_ID)
+	}
+
+	fmt.Println("Joined the group as: ", NODE_ID)
+}
+
 func IntroduceYourself() (map[string]MemberInfo, error) {
-	conn, err := net.Dial("tcp", GetServerEndpoint(INTRODUCER_SERVER_HOST))
+	conn, err := net.Dial("tcp", GetServerEndpoint(LEADER_SERVER_HOST))
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +98,7 @@ func InitializeMembershipInfoAndList(members map[string]MemberInfo, localIP stri
 		ip := GetIPFromID(id)
 		fmt.Printf("ID: %s Position: %d\n", id, memberInfo.RingPosition)
 
-		if ip == INTRODUCER_SERVER_HOST {
+		if ip == LEADER_SERVER_HOST {
 			AddToMembershipInfo(id, &MemberInfo{
 				Host:         ip,
 				failed:       memberInfo.failed,
