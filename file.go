@@ -48,7 +48,7 @@ type GetMessage struct {
 // Membership Info should have been updated before invoking this function.
 // Returns primary replicas.
 func UpdatePrimaryReplicas() []*FileInfo {
-	fmt.Println("Updating primary replica status for all files on this node")
+	// fmt.Println("Updating primary replica status for all files on this node")
 	var filenames []*FileInfo
 
 	for _, f := range fileInfoMap {
@@ -97,7 +97,7 @@ func PrintMachinesWithFile(hdfsfilename string) {
 func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 	nodeId := GetPrimaryReplicaForFile(hdfsfilename)
 
-	fmt.Println("File hash: ", GetRingPosition(hdfsfilename))
+	// fmt.Println("File hash: ", GetRingPosition(hdfsfilename))
 
 	content, err := os.ReadFile(localfilename)
 	if err != nil {
@@ -144,6 +144,7 @@ func CreateHDFSFile(localfilename string, hdfsfilename string) error {
 
 // Load the localfile and append it to an existing file on HyDFS
 func AppendToHDFSFile(localfilename string, hdfsfilename string) error {
+	fmt.Printf("Appending to %s\n", hdfsfilename)
 	// Clear cache entry to prevent stale reads.
 	if CACHE_ENABLED {
 		delete(tempFileInfoMap, hdfsfilename)
@@ -153,7 +154,7 @@ func AppendToHDFSFile(localfilename string, hdfsfilename string) error {
 
 	nodeId := GetPrimaryReplicaForFile(hdfsfilename)
 
-	fmt.Println("File hash: ", GetRingPosition(hdfsfilename))
+	// fmt.Println("File hash: ", GetRingPosition(hdfsfilename))
 
 	// Check if the file even exists on HyDFS
 	checkMessage := Message{Kind: CHECK, Data: hdfsfilename}
@@ -191,17 +192,16 @@ func AppendToHDFSFile(localfilename string, hdfsfilename string) error {
 		append_err := ProcessAppendMessage(appendMessage, false)
 		fmt.Printf("Appended Local file\n")
 		return append_err
-
 	} else {
 		append_err := SendMessage(nodeId, appendMessage)
-		fmt.Printf("Sent a message to %s append a localfile\n", nodeId)
+		fmt.Printf("Append completed\n")
 		return append_err
 	}
 }
 
 // Creates file on local disk and triggers replication.
 func CreateLocalFile(filename string, isTemp bool) error {
-	fmt.Printf("Creating file with name: %s \n", filename)
+	// fmt.Printf("Creating file with name: %s \n", filename)
 
 	isPrimaryReplica := false
 	if GetPrimaryReplicaForFile(filename) == NODE_ID {
@@ -390,7 +390,7 @@ func MergeHDFSFile(hdfsfilename string) error {
 
 // Get the hdfs file to the local disk, optionally request from a particular node Id.
 func GetHDFSToLocal(hdfsfilename string, localfilename string, nodeIdToRequest string) error {
-	fmt.Printf("Getting HDFS File %s to local file %s", hdfsfilename, localfilename)
+	fmt.Printf("Getting HDFS File %s to local file %s\n", hdfsfilename, localfilename)
 
 	var fileBlockMapToUse map[string][]*FileBlock
 
@@ -432,12 +432,14 @@ func GetHDFSToLocal(hdfsfilename string, localfilename string, nodeIdToRequest s
 		delete(tempFileBlockMap, hdfsfilename)
 	}
 
+	fmt.Println("Get completed")
+
 	return nil
 }
 
 // Append contents to a file on disk.
 func AppendToLocalFile(filename string, content []byte, isTemp bool) error {
-	fmt.Println("Appending to file: ", filename)
+	// fmt.Println("Appending to file: ", filename)
 
 	var fileInfoMapToUse map[string]*FileInfo
 	var fileBlockMapToUse map[string][]*FileBlock
@@ -678,6 +680,6 @@ func ReplicateFilesWrapper(files []*FileInfo) {
 	err := ReplicateFiles(files)
 
 	if err != nil {
-		fmt.Printf("ReplicateFilesWrapper: [%s]\n", err.Error())
+		// fmt.Printf("ReplicateFilesWrapper: [%s]\n", err.Error())
 	}
 }
